@@ -4,6 +4,8 @@ import math
 import win32gui
 import win32con
 import win32api
+import pyautogui
+from PIL import ImageGrab
 
 # ==================== НАСТРОЙКИ ====================
 BUTTONS = [
@@ -16,6 +18,10 @@ AD_ZONE_X2, AD_ZONE_Y2 = 1881, 988
 
 CENTER_X, CENTER_Y = 960, 540
 ICON_X, ICON_Y = 1224, 167
+
+# Область для проверки красного цвета (770-780, 436-438)
+WARN_BOX = (770, 436, 781, 439)
+WARN_CLICK = (1084, 630)
 
 
 # ===================================================
@@ -39,6 +45,21 @@ def force_foreground(hwnd_target):
         win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
 
 
+def check_and_close_warning():
+    """Проверяет красные пиксели и закрывает уведомление о товарах"""
+    img = ImageGrab.grab(bbox=WARN_BOX)
+    for x in range(img.width):
+        for y in range(img.height):
+            r, g, b = img.getpixel((x, y))
+            # Проверка на красный цвет (с допуском)
+            if r > 180 and g < 100 and b < 100:
+                print(f"[!] ОБНАРУЖЕНО уведомление! Клик по ({WARN_CLICK[0]}, {WARN_CLICK[1]})...")
+                pyautogui.click(WARN_CLICK[0], WARN_CLICK[1])
+                time.sleep(1.0)
+                return True
+    return False
+
+
 def move_and_click_background(gta_hwnd, target_x, target_y):
     start_x, start_y = random.randint(100, 1800), random.randint(100, 900)
     steps = random.randint(15, 25)
@@ -49,115 +70,87 @@ def move_and_click_background(gta_hwnd, target_x, target_y):
         win32gui.PostMessage(gta_hwnd, win32con.WM_MOUSEMOVE, 0, win32api.MAKELONG(curr_x, curr_y))
         time.sleep(0.01)
 
-    final_x = target_x + random.randint(-4, 4)
-    final_y = target_y + random.randint(-4, 4)
-    final_lparam = win32api.MAKELONG(final_x, final_y)
-
-    win32gui.PostMessage(gta_hwnd, win32con.WM_MOUSEMOVE, 0, final_lparam)
-    time.sleep(0.05)
+    final_lparam = win32api.MAKELONG(target_x, target_y)
     win32gui.PostMessage(gta_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, final_lparam)
     time.sleep(random.uniform(0.07, 0.15))
     win32gui.PostMessage(gta_hwnd, win32con.WM_LBUTTONUP, 0, final_lparam)
 
 
 def send_key_active(vk_code, duration=0.1):
-    """Шлет нажатие клавиши с ОБЯЗАТЕЛЬНЫМ скан-кодом для DirectX движка"""
-    # Вычисляем железный скан-код клавиши (для W это будет 0x11)
     scan_code = win32api.MapVirtualKey(vk_code, 0)
-
-    # Зажимаем клавишу
     win32api.keybd_event(vk_code, scan_code, 0, 0)
     time.sleep(duration)
-    # Отпускаем клавишу
     win32api.keybd_event(vk_code, scan_code, win32con.KEYEVENTF_KEYUP, 0)
 
 
 def main():
     gta_hwnd, title = find_gta_hwnd()
     if not gta_hwnd:
-        print("Окно игры не найдено!")
+        print("[-] Окно игры не найдено!")
         return
 
-    print(f"Успешно подключено к: {title}")
-    print("[*] Скрипт запущен. Исправление скан-кодов DirectX применено.")
+    print(f"[+] Подключено к: {title}")
     last_idx = -1
 
     while True:
         if not win32gui.IsWindow(gta_hwnd):
-            print("[-] Игра закрылась. Остановка.")
+            print("[-] Игра закрылась. Выход.")
             break
 
         is_in_ad = False
 
-        # --- ШАГ 1: Клик по категории маркетплейса в фоне ---
+        # --- ФОНОВЫЕ ДЕЙСТВИЯ ---
         idx = random.choice([i for i in range(len(BUTTONS)) if i != last_idx])
         last_idx = idx
-        print(f"\n[*] [Фон] Переход в категорию №{idx + 1}")
+        print(f"\n[*] [Фон] Клик по категории №{idx + 1}")
         move_and_click_background(gta_hwnd, BUTTONS[idx][0], BUTTONS[idx][1])
+        time.sleep(random.uniform(25, 30))
 
-        wait_before_ad = random.uniform(25.0, 30.0)
-        print(f"[~] Ждем {wait_before_ad:.2f} сек. на загрузку категории...")
-        time.sleep(wait_before_ad)
-
-        # --- ШАГ 2: Клик по случайному объявлению в фоне ---
-        ad_x = random.randint(AD_ZONE_X1, AD_ZONE_X2)
-        ad_y = random.randint(AD_ZONE_Y1, AD_ZONE_Y2)
-        print(f"[*] [Фон] Заход в случайное объявление: ({ad_x}, {ad_y})")
+        ad_x, ad_y = random.randint(AD_ZONE_X1, AD_ZONE_X2), random.randint(AD_ZONE_Y1, AD_ZONE_Y2)
+        print(f"[*] [Фон] Клик по объявлению: ({ad_x}, {ad_y})")
         move_and_click_background(gta_hwnd, ad_x, ad_y)
-
         is_in_ad = True
+        time.sleep(random.uniform(25, 30))
 
-        wait_inside_ad = random.uniform(25.0, 30.0)
-        print(f"[~] Ждем {wait_inside_ad:.2f} сек. внутри объявления...")
-        time.sleep(wait_inside_ad)
-
-        # --- ШАГ 3: Захват фокуса игры ---
-        print("\n[!] Переключаю фокус на игру...")
+        # --- АКТИВНЫЕ ДЕЙСТВИЯ ---
+        print("[!] Перехват фокуса для ходьбы...")
         user_hwnd = win32gui.GetForegroundWindow()
         force_foreground(gta_hwnd)
-        time.sleep(0.6)
+        time.sleep(0.8)
 
-        # --- ШАГ 4: Умный выход через Управление ESCAPE ---
         if is_in_ad:
-            print("[*] [Активно] Обнаружено открытое объявление! Жмем 1-й ESC для выхода из него...")
-            send_key_active(win32con.VK_ESCAPE, random.uniform(0.1, 0.15))
-            time.sleep(random.uniform(0.5, 0.8))
+            print("[*] Выход из объявления (ESC)...")
+            send_key_active(win32con.VK_ESCAPE, 0.1)
+            time.sleep(0.5)
 
-        print("[*] [Активно] Закрываем маркетплейс и телефон (ESC x2)...")
-        send_key_active(win32con.VK_ESCAPE, random.uniform(0.1, 0.15))
-        time.sleep(random.uniform(0.4, 0.7))
-        send_key_active(win32con.VK_ESCAPE, random.uniform(0.1, 0.15))
+        print("[*] Закрытие маркетплейса (ESC x2)...")
+        send_key_active(win32con.VK_ESCAPE, 0.1)
+        time.sleep(0.5)
+        send_key_active(win32con.VK_ESCAPE, 0.1)
         time.sleep(1.0)
 
-        # --- ШАГ 5: Физическая ходьба (W) с рабочим скан-кодом ---
         walk_time = random.uniform(1.5, 2.5)
-        print(f"[*] [Активно] Персонаж идет вперед {round(walk_time, 2)} сек...")
-        send_key_active(0x57, walk_time)  # 0x57 — виртуальный код 'W'
+        print(f"[*] Иду вперед {walk_time:.2f} сек...")
+        send_key_active(0x57, walk_time)
         time.sleep(1.2)
 
-        # --- ШАГ 6: Возврат в маркетплейс по цепочке действий ---
-        print("[*] [Активно] Достаем девайс (Стрелка Вниз)...")
-        send_key_active(win32con.VK_DOWN, random.uniform(0.1, 0.15))
-        time.sleep(random.uniform(1.2, 1.6))
-
-        print(f"[*] [Активно] Клик по центру экрана: ({CENTER_X}, {CENTER_Y})...")
-        move_and_click_background(gta_hwnd, CENTER_X, CENTER_Y)
-        time.sleep(random.uniform(0.8, 1.2))
-
-        print(f"[*] [Активно] Открываем приложение маркетплейса: ({ICON_X}, {ICON_Y})...")
-        move_and_click_background(gta_hwnd, ICON_X, ICON_Y)
+        print("[*] Возврат в маркетплейс...")
+        send_key_active(win32con.VK_DOWN, 0.1)
+        time.sleep(1.5)
+        pyautogui.click(CENTER_X, CENTER_Y)
+        time.sleep(1.0)
+        pyautogui.click(ICON_X, ICON_Y)
         time.sleep(2.0)
 
-        is_in_ad = False
+        # Проверка склада
+        check_and_close_warning()
 
-        # --- ШАГ 7: Возврат фокуса пользователю ---
-        if user_hwnd and user_hwnd != gta_hwnd:
-            print("[+] Возвращаю фокус на твое рабочее окно.")
+        if user_hwnd:
+            print("[+] Возврат фокуса пользователю.")
             force_foreground(user_hwnd)
 
-        # --- ШАГ 8: Большой перерыв ---
-        main_sleep = random.uniform(180.0, 360.0)
-        print(f"[Zzz] Цикл завершен. Следующая проверка через {round(main_sleep / 60, 2)} мин...")
+        main_sleep = random.uniform(180, 360)
+        print(f"[Zzz] Цикл завершен. Сплю {main_sleep / 60:.2f} мин.")
         time.sleep(main_sleep)
 
 
@@ -165,4 +158,4 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n[-] Скрипт остановлен.")
+        print("\n[-] Скрипт остановлен пользователем.")
