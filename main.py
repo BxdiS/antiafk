@@ -23,6 +23,13 @@ ICON_X, ICON_Y = 1224, 167
 WARN_BOX = (770, 436, 781, 439)
 WARN_CLICK = (1084, 630)
 
+# Координаты для детекции меню карты / паузы
+MAP_PIXEL_X, MAP_PIXEL_Y = 512, 120
+
+# Координаты для детекции состояний планшета
+HUD_PIXEL = (1888, 25)
+MP_PIXEL = (1770, 34)
+
 
 # ===================================================
 
@@ -53,11 +60,75 @@ def check_and_close_warning():
             r, g, b = img.getpixel((x, y))
             # Проверка на красный цвет (с допуском)
             if r > 180 and g < 100 and b < 100:
-                print(f"[!] ОБНАРУЖЕНО уведомление! Клик по ({WARN_CLICK[0]}, {WARN_CLICK[1]})...")
+                print(f"[!] ОБНАРУЖЕНО уведомление склада! Клик по ({WARN_CLICK[0]}, {WARN_CLICK[1]})...")
                 pyautogui.click(WARN_CLICK[0], WARN_CLICK[1])
                 time.sleep(1.0)
                 return True
     return False
+
+
+def check_and_close_map():
+    """Проверяет, не залетели ли мы случайно в карту/меню паузы, и закрывает её"""
+    img = ImageGrab.grab(bbox=(MAP_PIXEL_X, MAP_PIXEL_Y, MAP_PIXEL_X + 1, MAP_PIXEL_Y + 1))
+    r, g, b = img.getpixel((0, 0))
+
+    # Ищем розово-пурпурный цвет #F0006C
+    if r > 200 and g < 40 and b > 80 and b < 140:
+        print("[!] Обнаружено случайное открытие меню карты! Закрываем (ESC)...")
+        send_key_active(win32con.VK_ESCAPE, 0.1)
+        time.sleep(1.0)
+        return True
+    return False
+
+
+def smart_state_recovery():
+    """Анализирует пиксели и приводит интерфейс к открытому маркетплейсу"""
+    print("[~] Анализ состояния интерфейса...")
+
+    # Захват пикселя HUD в игре
+    img_hud = ImageGrab.grab(bbox=(HUD_PIXEL[0], HUD_PIXEL[1], HUD_PIXEL[0] + 1, HUD_PIXEL[1] + 1))
+    r_hud, g_hud, b_hud = img_hud.getpixel((0, 0))
+
+    # Захват пикселя заголовка маркетплейса
+    img_mp = ImageGrab.grab(bbox=(MP_PIXEL[0], MP_PIXEL[1], MP_PIXEL[0] + 1, MP_PIXEL[1] + 1))
+    r_mp, g_mp, b_mp = img_mp.getpixel((0, 0))
+
+    # СОСТОЯНИЕ 1: Маркетплейс затемнен предупреждением (#1E416A)
+    # R: ~30, G: ~65, B: ~106
+    if 15 <= r_mp <= 50 and 45 <= g_mp <= 90 and 85 <= b_mp <= 130:
+        print("[*] Статус: Маркетплейс открыт, но перекрыт плашкой. Убираем плашку...")
+        check_and_close_warning()
+        return
+
+    # СОСТОЯНИЕ 2: Чистый активный маркетплейс (#3D82D5)
+    # R: ~61, G: ~130, B: ~213
+    if 40 <= r_mp <= 85 and 110 <= g_mp <= 160 and 190 <= b_mp <= 245:
+        print("[*] Статус: Маркетплейс активен. Все отлично.")
+        return
+
+    # СОСТОЯНИЕ 3: Просто в игре, горит HUD (#FF007F)
+    # R: 255, G: 0, B: 127
+    if r_hud >= 200 and g_hud <= 60 and 80 <= b_hud <= 170:
+        print("[*] Статус: Персонаж в игре. Открываю планшет и маркетплейс...")
+        send_key_active(win32con.VK_DOWN, 0.1)
+        time.sleep(1.5)
+        pyautogui.click(CENTER_X, CENTER_Y)
+        time.sleep(1.0)
+        pyautogui.click(ICON_X, ICON_Y)
+        time.sleep(4.5)  # Ждем загрузки
+        check_and_close_warning()
+        return
+
+    # ЕСЛИ СОСТОЯНИЕ НЕИЗВЕСТНО (Например, другая менюшка или темнота)
+    print(
+        f"[?] Статус: Неопознан (HUD: {r_hud},{g_hud},{b_hud} | MP: {r_mp},{g_mp},{b_mp}). Пробую дефолтное открытие...")
+    send_key_active(win32con.VK_DOWN, 0.1)
+    time.sleep(1.5)
+    pyautogui.click(CENTER_X, CENTER_Y)
+    time.sleep(1.0)
+    pyautogui.click(ICON_X, ICON_Y)
+    time.sleep(4.5)
+    check_and_close_warning()
 
 
 def move_and_click_background(gta_hwnd, target_x, target_y):
@@ -70,7 +141,12 @@ def move_and_click_background(gta_hwnd, target_x, target_y):
         win32gui.PostMessage(gta_hwnd, win32con.WM_MOUSEMOVE, 0, win32api.MAKELONG(curr_x, curr_y))
         time.sleep(0.01)
 
-    final_lparam = win32api.MAKELONG(target_x, target_y)
+    final_x = target_x + random.randint(-4, 4)
+    final_y = target_y + random.randint(-4, 4)
+    final_lparam = win32api.MAKELONG(final_x, final_y)
+
+    win32gui.PostMessage(gta_hwnd, win32con.WM_MOUSEMOVE, 0, final_lparam)
+    time.sleep(0.05)
     win32gui.PostMessage(gta_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, final_lparam)
     time.sleep(random.uniform(0.07, 0.15))
     win32gui.PostMessage(gta_hwnd, win32con.WM_LBUTTONUP, 0, final_lparam)
@@ -90,6 +166,17 @@ def main():
         return
 
     print(f"[+] Подключено к: {title}")
+
+    # Инициализация при старте скрипта (Проверка и открытие маркетплейса, если надо)
+    print("\n[!] Первичная инициализация состояния...")
+    user_hwnd = win32gui.GetForegroundWindow()
+    force_foreground(gta_hwnd)
+    time.sleep(1.0)
+    smart_state_recovery()
+    if user_hwnd:
+        force_foreground(user_hwnd)
+
+    print("[*] Скрипт перешел в рабочий цикл.\n")
     last_idx = -1
 
     while True:
@@ -129,21 +216,16 @@ def main():
         send_key_active(win32con.VK_ESCAPE, 0.1)
         time.sleep(1.0)
 
+        # Защитная проверка: если улетели в карту паузы
+        check_and_close_map()
+
         walk_time = random.uniform(1.5, 2.5)
         print(f"[*] Иду вперед {walk_time:.2f} сек...")
         send_key_active(0x57, walk_time)
         time.sleep(1.2)
 
-        print("[*] Возврат в маркетплейс...")
-        send_key_active(win32con.VK_DOWN, 0.1)
-        time.sleep(1.5)
-        pyautogui.click(CENTER_X, CENTER_Y)
-        time.sleep(1.0)
-        pyautogui.click(ICON_X, ICON_Y)
-        time.sleep(2.0)
-
-        # Проверка склада
-        check_and_close_warning()
+        # Вызов нашей умной функции возврата
+        smart_state_recovery()
 
         if user_hwnd:
             print("[+] Возврат фокуса пользователю.")
