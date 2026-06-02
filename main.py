@@ -7,31 +7,43 @@ import win32api
 import pyautogui
 from PIL import ImageGrab
 
-# ==================== НАСТРОЙКИ ====================
-BUTTONS = [
+# --------------------- БАЗОВЫЕ (для 1920x1080) ---------------------
+BASE_W, BASE_H = 1920, 1080
+
+BASE_BUTTONS = [
     (133, 133), (153, 183), (156, 227), (130, 273), (136, 318),
     (114, 365), (120, 410), (133, 452), (121, 496), (150, 544), (170, 590)
 ]
 
-AD_ZONE_X1, AD_ZONE_Y1 = 314, 125
-AD_ZONE_X2, AD_ZONE_Y2 = 1881, 988
+# Область объявлений (baseline)
+BASE_AD_ZONE_X1, BASE_AD_ZONE_Y1 = 314, 125
+BASE_AD_ZONE_X2, BASE_AD_ZONE_Y2 = 1881, 988
 
-CENTER_X, CENTER_Y = 960, 540
-ICON_X, ICON_Y = 1224, 167
+# Центр и иконка (для pyautogui.click — screen coords)
+BASE_CENTER_X, BASE_CENTER_Y = 960, 540
+BASE_ICON_X, BASE_ICON_Y = 1224, 167
 
-# Область для проверки красного цвета (770-780, 436-438)
-WARN_BOX = (770, 436, 781, 439)
-WARN_CLICK = (1084, 630)
+# Область для проверки красного цвета (bbox in baseline coords)
+BASE_WARN_BOX = (770, 436, 781, 439)
+BASE_WARN_CLICK = (1084, 630)
 
-# Координаты для детекции меню карты / паузы
-MAP_PIXEL_X, MAP_PIXEL_Y = 512, 120
+# Координаты для детекции меню карты / паузы (single pixel)
+BASE_MAP_PIXEL = (512, 120)
 
-# Координаты для детекции состояний планшета
-HUD_PIXEL = (1888, 25)
-MP_PIXEL = (1770, 34)
+# Координаты для детекции состояний планшета (single pixel)
+BASE_HUD_PIXEL = (1888, 25)
+BASE_MP_PIXEL = (1770, 34)
+# ---------------------------------------------------------------
 
-
-# ===================================================
+# Эти переменные будут заполнены функцией apply_scaling(hwnd)
+BUTTONS = []
+AD_ZONE_X1 = AD_ZONE_Y1 = AD_ZONE_X2 = AD_ZONE_Y2 = 0
+CENTER_X = CENTER_Y = ICON_X = ICON_Y = 0
+WARN_BOX = (0, 0, 0, 0)
+WARN_CLICK = (0, 0)
+MAP_PIXEL_X = MAP_PIXEL_Y = 0
+HUD_PIXEL = (0, 0)
+MP_PIXEL = (0, 0)
 
 def find_gta_hwnd():
     target_titles = ["Grand Theft Auto V", "Majestic Multiplayer"]
@@ -41,6 +53,99 @@ def find_gta_hwnd():
             return gta_hwnd, title
     return None, None
 
+def get_window_rect(hwnd):
+    try:
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        width = right - left
+        height = bottom - top
+        return left, top, width, height
+    except Exception:
+        return None
+
+def scale_point_base_to_screen(base_x, base_y, win_left, win_top, win_w, win_h):
+    """Scale a baseline point (relative to BASE_WxBASE_H) to screen coords based on window rect."""
+    if win_w <= 0 or win_h <= 0:
+        # fallback: scale to primary monitor
+        screen_w, screen_h = pyautogui.size()
+        sx = screen_w / BASE_W
+        sy = screen_h / BASE_H
+        return int(round(base_x * sx)), int(round(base_y * sy))
+    sx = win_w / BASE_W
+    sy = win_h / BASE_H
+    screen_x = win_left + int(round(base_x * sx))
+    screen_y = win_top + int(round(base_y * sy))
+    return screen_x, screen_y
+
+def scale_point_base_to_client(base_x, base_y, win_w, win_h):
+    """Scale baseline point to client coordinates (0..win_w, 0..win_h) for PostMessage usage."""
+    if win_w <= 0 or win_h <= 0:
+        screen_w, screen_h = pyautogui.size()
+        sx = screen_w / BASE_W
+        sy = screen_h / BASE_H
+        return int(round(base_x * sx)), int(round(base_y * sy))
+    sx = win_w / BASE_W
+    sy = win_h / BASE_H
+    client_x = int(round(base_x * sx))
+    client_y = int(round(base_y * sy))
+    return client_x, client_y
+
+def scale_box_base_to_screen(box, win_left, win_top, win_w, win_h):
+    x1, y1, x2, y2 = box
+    sx = win_w / BASE_W if win_w > 0 else pyautogui.size()[0] / BASE_W
+    sy = win_h / BASE_H if win_h > 0 else pyautogui.size()[1] / BASE_H
+    screen_x1 = win_left + int(round(x1 * sx))
+    screen_y1 = win_top + int(round(y1 * sy))
+    screen_x2 = win_left + int(round(x2 * sx))
+    screen_y2 = win_top + int(round(y2 * sy))
+    return (screen_x1, screen_y1, screen_x2, screen_y2)
+
+def apply_scaling(hwnd):
+    """Заполняет глобальные координаты, масштабируя базовые под текущий размер окна/экрана."""
+    global BUTTONS, AD_ZONE_X1, AD_ZONE_Y1, AD_ZONE_X2, AD_ZONE_Y2
+    global CENTER_X, CENTER_Y, ICON_X, ICON_Y
+    global WARN_BOX, WARN_CLICK, MAP_PIXEL_X, MAP_PIXEL_Y, HUD_PIXEL, MP_PIXEL
+
+    rect = get_window_rect(hwnd)
+    if rect:
+        win_left, win_top, win_w, win_h = rect
+    else:
+        # fallback to primary monitor
+        screen_w, screen_h = pyautogui.size()
+        win_left, win_top, win_w, win_h = 0, 0, screen_w, screen_h
+
+    # BUTTONS — client coords (for PostMessage)
+    BUTTONS = [scale_point_base_to_client(x, y, win_w, win_h) for (x, y) in BASE_BUTTONS]
+
+    # AD_ZONE — client coords for random click inside area
+    ad1 = scale_point_base_to_client(BASE_AD_ZONE_X1, BASE_AD_ZONE_Y1, win_w, win_h)
+    ad2 = scale_point_base_to_client(BASE_AD_ZONE_X2, BASE_AD_ZONE_Y2, win_w, win_h)
+    AD_ZONE_X1, AD_ZONE_Y1 = min(ad1[0], ad2[0]), min(ad1[1], ad2[1])
+    AD_ZONE_X2, AD_ZONE_Y2 = max(ad1[0], ad2[0]), max(ad1[1], ad2[1])
+
+    # CENTER and ICON — screen coords (for pyautogui.click)
+    CENTER_X, CENTER_Y = scale_point_base_to_screen(BASE_CENTER_X, BASE_CENTER_Y, win_left, win_top, win_w, win_h)
+    ICON_X, ICON_Y = scale_point_base_to_screen(BASE_ICON_X, BASE_ICON_Y, win_left, win_top, win_w, win_h)
+
+    # WARN_BOX — screen bbox
+    WARN_BOX = scale_box_base_to_screen(BASE_WARN_BOX, win_left, win_top, win_w, win_h)
+    WARN_CLICK = scale_point_base_to_screen(BASE_WARN_CLICK[0], BASE_WARN_CLICK[1], win_left, win_top, win_w, win_h)
+
+    # single-pixel checks (screen coords)
+    map_px = scale_point_base_to_screen(BASE_MAP_PIXEL[0], BASE_MAP_PIXEL[1], win_left, win_top, win_w, win_h)
+    MAP_PIXEL_X, MAP_PIXEL_Y = map_px
+
+    hud_px = scale_point_base_to_screen(BASE_HUD_PIXEL[0], BASE_HUD_PIXEL[1], win_left, win_top, win_w, win_h)
+    HUD_PIXEL = hud_px
+
+    mp_px = scale_point_base_to_screen(BASE_MP_PIXEL[0], BASE_MP_PIXEL[1], win_left, win_top, win_w, win_h)
+    MP_PIXEL = mp_px
+
+    print(f"[i] Применено масштабирование: window={win_w}x{win_h} @({win_left},{win_top})")
+    print(f"[i] CENTER={CENTER_X, CENTER_Y}, ICON={ICON_X, ICON_Y}")
+    print(f"[i] WARN_BOX={WARN_BOX}, WARN_CLICK={WARN_CLICK}")
+    print(f"[i] MAP_PIXEL={MAP_PIXEL_X, MAP_PIXEL_Y}, HUD_PIXEL={HUD_PIXEL}, MP_PIXEL={MP_PIXEL}")
+    print(f"[i] AD_ZONE client coords: ({AD_ZONE_X1},{AD_ZONE_Y1}) - ({AD_ZONE_X2},{AD_ZONE_Y2})")
+    print(f"[i] BUTTONS (client): {BUTTONS}")
 
 def force_foreground(hwnd_target):
     try:
@@ -51,63 +156,49 @@ def force_foreground(hwnd_target):
         win32gui.SetForegroundWindow(hwnd_target)
         win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
 
-
 def check_and_close_warning():
-    """Проверяет красные пиксели и закрывает уведомление о товарах"""
+    """Проверяет красные пиксели и закрывает уведомление о товарах (использует WARN_BOX, WARN_CLICK в screen coords)"""
     img = ImageGrab.grab(bbox=WARN_BOX)
     for x in range(img.width):
         for y in range(img.height):
             r, g, b = img.getpixel((x, y))
-            # Проверка на красный цвет (с допуском)
             if r > 180 and g < 100 and b < 100:
-                print(f"[!] ОБНАРУЖЕНО уведомление склада! Клик по ({WARN_CLICK[0]}, {WARN_CLICK[1]})...")
+                print(f"[!] ОБНАРУЖЕНО уведомление склада! Клик по {WARN_CLICK}...")
                 pyautogui.click(WARN_CLICK[0], WARN_CLICK[1])
                 time.sleep(1.0)
                 return True
     return False
 
-
 def check_and_close_map():
-    """Проверяет, не залетели ли мы случайно в карту/меню паузы, и закрывает её"""
+    """Проверяет, не залетели ли мы случайно в карту/меню паузы, и закрывает её (использует MAP_PIXEL_X/Y screen coords)"""
     img = ImageGrab.grab(bbox=(MAP_PIXEL_X, MAP_PIXEL_Y, MAP_PIXEL_X + 1, MAP_PIXEL_Y + 1))
     r, g, b = img.getpixel((0, 0))
-
-    # Ищем розово-пурпурный цвет #F0006C
-    if r > 200 and g < 40 and b > 80 and b < 140:
+    if r > 200 and g < 40 and 80 <= b <= 140:
         print("[!] Обнаружено случайное открытие меню карты! Закрываем (ESC)...")
         send_key_active(win32con.VK_ESCAPE, 0.1)
         time.sleep(1.0)
         return True
     return False
 
-
 def smart_state_recovery():
-    """Анализирует пиксели и приводит интерфейс к открытому маркетплейсу"""
+    """Анализирует пиксели и приводит интерфейс к открытому маркетплейсу (использует HUD_PIXEL/MP_PIXEL screen coords)"""
     print("[~] Анализ состояния интерфейса...")
 
-    # Захват пикселя HUD в игре
     img_hud = ImageGrab.grab(bbox=(HUD_PIXEL[0], HUD_PIXEL[1], HUD_PIXEL[0] + 1, HUD_PIXEL[1] + 1))
     r_hud, g_hud, b_hud = img_hud.getpixel((0, 0))
 
-    # Захват пикселя заголовка маркетплейса
     img_mp = ImageGrab.grab(bbox=(MP_PIXEL[0], MP_PIXEL[1], MP_PIXEL[0] + 1, MP_PIXEL[1] + 1))
     r_mp, g_mp, b_mp = img_mp.getpixel((0, 0))
 
-    # СОСТОЯНИЕ 1: Маркетплейс затемнен предупреждением (#1E416A)
-    # R: ~30, G: ~65, B: ~106
     if 15 <= r_mp <= 50 and 45 <= g_mp <= 90 and 85 <= b_mp <= 130:
         print("[*] Статус: Маркетплейс открыт, но перекрыт плашкой. Убираем плашку...")
         check_and_close_warning()
         return
 
-    # СОСТОЯНИЕ 2: Чистый активный маркетплейс (#3D82D5)
-    # R: ~61, G: ~130, B: ~213
     if 40 <= r_mp <= 85 and 110 <= g_mp <= 160 and 190 <= b_mp <= 245:
         print("[*] Статус: Маркетплейс активен. Все отлично.")
         return
 
-    # СОСТОЯНИЕ 3: Просто в игре, горит HUD (#FF007F)
-    # R: 255, G: 0, B: 127
     if r_hud >= 200 and g_hud <= 60 and 80 <= b_hud <= 170:
         print("[*] Статус: Персонаж в игре. Открываю планшет и маркетплейс...")
         send_key_active(win32con.VK_DOWN, 0.1)
@@ -115,13 +206,11 @@ def smart_state_recovery():
         pyautogui.click(CENTER_X, CENTER_Y)
         time.sleep(1.0)
         pyautogui.click(ICON_X, ICON_Y)
-        time.sleep(4.5)  # Ждем загрузки
+        time.sleep(4.5)
         check_and_close_warning()
         return
 
-    # ЕСЛИ СОСТОЯНИЕ НЕИЗВЕСТНО (Например, другая менюшка или темнота)
-    print(
-        f"[?] Статус: Неопознан (HUD: {r_hud},{g_hud},{b_hud} | MP: {r_mp},{g_mp},{b_mp}). Пробую дефолтное открытие...")
+    print(f"[?] Статус: Неопознан (HUD: {r_hud},{g_hud},{b_hud} | MP: {r_mp},{g_mp},{b_mp}). Пробую дефолтное открытие...")
     send_key_active(win32con.VK_DOWN, 0.1)
     time.sleep(1.5)
     pyautogui.click(CENTER_X, CENTER_Y)
@@ -130,8 +219,8 @@ def smart_state_recovery():
     time.sleep(4.5)
     check_and_close_warning()
 
-
 def move_and_click_background(gta_hwnd, target_x, target_y):
+    """target_x/target_y здесь ожидаются как client coords (0..win_w/0..win_h)"""
     start_x, start_y = random.randint(100, 1800), random.randint(100, 900)
     steps = random.randint(15, 25)
     for i in range(steps):
@@ -151,13 +240,11 @@ def move_and_click_background(gta_hwnd, target_x, target_y):
     time.sleep(random.uniform(0.07, 0.15))
     win32gui.PostMessage(gta_hwnd, win32con.WM_LBUTTONUP, 0, final_lparam)
 
-
 def send_key_active(vk_code, duration=0.1):
     scan_code = win32api.MapVirtualKey(vk_code, 0)
     win32api.keybd_event(vk_code, scan_code, 0, 0)
     time.sleep(duration)
     win32api.keybd_event(vk_code, scan_code, win32con.KEYEVENTF_KEYUP, 0)
-
 
 def main():
     gta_hwnd, title = find_gta_hwnd()
@@ -167,11 +254,14 @@ def main():
 
     print(f"[+] Подключено к: {title}")
 
-    # Инициализация при старте скрипта (Проверка и открытие маркетплейса, если надо)
     print("\n[!] Первичная инициализация состояния...")
     user_hwnd = win32gui.GetForegroundWindow()
     force_foreground(gta_hwnd)
     time.sleep(1.0)
+
+    # ВАЖНО: применяем масштабирование прямо после того, как окно восстановлено/в фокусе
+    apply_scaling(gta_hwnd)
+
     smart_state_recovery()
     if user_hwnd:
         force_foreground(user_hwnd)
@@ -194,7 +284,7 @@ def main():
         time.sleep(random.uniform(25, 30))
 
         ad_x, ad_y = random.randint(AD_ZONE_X1, AD_ZONE_X2), random.randint(AD_ZONE_Y1, AD_ZONE_Y2)
-        print(f"[*] [Фон] Клик по объявлению: ({ad_x}, {ad_y})")
+        print(f"[*] [Фон] Клик по объявлению (client coords): ({ad_x}, {ad_y})")
         move_and_click_background(gta_hwnd, ad_x, ad_y)
         is_in_ad = True
         time.sleep(random.uniform(25, 30))
@@ -216,7 +306,6 @@ def main():
         send_key_active(win32con.VK_ESCAPE, 0.1)
         time.sleep(1.0)
 
-        # Защитная проверка: если улетели в карту паузы
         check_and_close_map()
 
         walk_time = random.uniform(1.5, 2.5)
@@ -224,7 +313,6 @@ def main():
         send_key_active(0x57, walk_time)
         time.sleep(1.2)
 
-        # Вызов нашей умной функции возврата
         smart_state_recovery()
 
         if user_hwnd:
