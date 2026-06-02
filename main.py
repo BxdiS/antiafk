@@ -45,6 +45,18 @@ MAP_PIXEL_X = MAP_PIXEL_Y = 0
 HUD_PIXEL = (0, 0)
 MP_PIXEL = (0, 0)
 
+# Виртуальные коды клавиш
+VK_W = 0x57
+VK_A = 0x41
+VK_S = 0x53
+VK_C = 0x43
+VK_ESCAPE = win32con.VK_ESCAPE
+
+# Настройки задержек между нажатиями поворота (в секундах)
+TURN_GAP_MEAN_FIRST = 5.0    # кд между A->S и S->C для первого поворота
+TURN_GAP_MEAN_SECOND = 4.0   # кд для второго поворота (уменьшённый)
+TURN_GAP_JITTER = 0.5        # ± джиттер
+
 def find_gta_hwnd():
     target_titles = ["Grand Theft Auto V", "Majestic Multiplayer"]
     for title in target_titles:
@@ -65,7 +77,6 @@ def get_window_rect(hwnd):
 def scale_point_base_to_screen(base_x, base_y, win_left, win_top, win_w, win_h):
     """Scale a baseline point (relative to BASE_WxBASE_H) to screen coords based on window rect."""
     if win_w <= 0 or win_h <= 0:
-        # fallback: scale to primary monitor
         screen_w, screen_h = pyautogui.size()
         sx = screen_w / BASE_W
         sy = screen_h / BASE_H
@@ -109,28 +120,22 @@ def apply_scaling(hwnd):
     if rect:
         win_left, win_top, win_w, win_h = rect
     else:
-        # fallback to primary monitor
         screen_w, screen_h = pyautogui.size()
         win_left, win_top, win_w, win_h = 0, 0, screen_w, screen_h
 
-    # BUTTONS — client coords (for PostMessage)
     BUTTONS = [scale_point_base_to_client(x, y, win_w, win_h) for (x, y) in BASE_BUTTONS]
 
-    # AD_ZONE — client coords for random click inside area
     ad1 = scale_point_base_to_client(BASE_AD_ZONE_X1, BASE_AD_ZONE_Y1, win_w, win_h)
     ad2 = scale_point_base_to_client(BASE_AD_ZONE_X2, BASE_AD_ZONE_Y2, win_w, win_h)
     AD_ZONE_X1, AD_ZONE_Y1 = min(ad1[0], ad2[0]), min(ad1[1], ad2[1])
     AD_ZONE_X2, AD_ZONE_Y2 = max(ad1[0], ad2[0]), max(ad1[1], ad2[1])
 
-    # CENTER and ICON — screen coords (for pyautogui.click)
     CENTER_X, CENTER_Y = scale_point_base_to_screen(BASE_CENTER_X, BASE_CENTER_Y, win_left, win_top, win_w, win_h)
     ICON_X, ICON_Y = scale_point_base_to_screen(BASE_ICON_X, BASE_ICON_Y, win_left, win_top, win_w, win_h)
 
-    # WARN_BOX — screen bbox
     WARN_BOX = scale_box_base_to_screen(BASE_WARN_BOX, win_left, win_top, win_w, win_h)
     WARN_CLICK = scale_point_base_to_screen(BASE_WARN_CLICK[0], BASE_WARN_CLICK[1], win_left, win_top, win_w, win_h)
 
-    # single-pixel checks (screen coords)
     map_px = scale_point_base_to_screen(BASE_MAP_PIXEL[0], BASE_MAP_PIXEL[1], win_left, win_top, win_w, win_h)
     MAP_PIXEL_X, MAP_PIXEL_Y = map_px
 
@@ -157,7 +162,6 @@ def force_foreground(hwnd_target):
         win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
 
 def check_and_close_warning():
-    """Проверяет красные пиксели и закрывает уведомление о товарах (использует WARN_BOX, WARN_CLICK в screen coords)"""
     img = ImageGrab.grab(bbox=WARN_BOX)
     for x in range(img.width):
         for y in range(img.height):
@@ -170,18 +174,16 @@ def check_and_close_warning():
     return False
 
 def check_and_close_map():
-    """Проверяет, не залетели ли мы случайно в карту/меню паузы, и закрывает её (использует MAP_PIXEL_X/Y screen coords)"""
     img = ImageGrab.grab(bbox=(MAP_PIXEL_X, MAP_PIXEL_Y, MAP_PIXEL_X + 1, MAP_PIXEL_Y + 1))
     r, g, b = img.getpixel((0, 0))
     if r > 200 and g < 40 and 80 <= b <= 140:
         print("[!] Обнаружено случайное открытие меню карты! Закрываем (ESC)...")
-        send_key_active(win32con.VK_ESCAPE, 0.1)
+        send_key_active(VK_ESCAPE, 0.1)
         time.sleep(1.0)
         return True
     return False
 
 def smart_state_recovery():
-    """Анализирует пиксели и приводит интерфейс к открытому маркетплейсу (использует HUD_PIXEL/MP_PIXEL screen coords)"""
     print("[~] Анализ состояния интерфейса...")
 
     img_hud = ImageGrab.grab(bbox=(HUD_PIXEL[0], HUD_PIXEL[1], HUD_PIXEL[0] + 1, HUD_PIXEL[1] + 1))
@@ -220,7 +222,6 @@ def smart_state_recovery():
     check_and_close_warning()
 
 def move_and_click_background(gta_hwnd, target_x, target_y):
-    """target_x/target_y здесь ожидаются как client coords (0..win_w/0..win_h)"""
     start_x, start_y = random.randint(100, 1800), random.randint(100, 900)
     steps = random.randint(15, 25)
     for i in range(steps):
@@ -246,6 +247,22 @@ def send_key_active(vk_code, duration=0.1):
     time.sleep(duration)
     win32api.keybd_event(vk_code, scan_code, win32con.KEYEVENTF_KEYUP, 0)
 
+def perform_turn_sequence(gap_mean):
+    dur_a = random.uniform(0.08, 0.18)
+    dur_s = random.uniform(0.08, 0.18)
+    dur_c = random.uniform(0.08, 0.18)
+
+    gap1 = random.uniform(max(0.01, gap_mean - TURN_GAP_JITTER), gap_mean + TURN_GAP_JITTER)
+    gap2 = random.uniform(max(0.01, gap_mean - TURN_GAP_JITTER), gap_mean + TURN_GAP_JITTER)
+
+    print(f"[*] Выполняю поворот: A({dur_a:.2f}s) -> pause {gap1:.2f}s -> S({dur_s:.2f}s) -> pause {gap2:.2f}s -> C({dur_c:.2f}s)")
+    send_key_active(VK_A, dur_a)
+    time.sleep(gap1)
+    send_key_active(VK_S, dur_s)
+    time.sleep(gap2)
+    send_key_active(VK_C, dur_c)
+    time.sleep(random.uniform(0.05, 0.15))
+
 def main():
     gta_hwnd, title = find_gta_hwnd()
     if not gta_hwnd:
@@ -259,7 +276,6 @@ def main():
     force_foreground(gta_hwnd)
     time.sleep(1.0)
 
-    # ВАЖНО: применяем масштабирование прямо после того, как окно восстановлено/в фокусе
     apply_scaling(gta_hwnd)
 
     smart_state_recovery()
@@ -297,21 +313,40 @@ def main():
 
         if is_in_ad:
             print("[*] Выход из объявления (ESC)...")
-            send_key_active(win32con.VK_ESCAPE, 0.1)
+            send_key_active(VK_ESCAPE, 0.1)
             time.sleep(0.5)
 
         print("[*] Закрытие маркетплейса (ESC x2)...")
-        send_key_active(win32con.VK_ESCAPE, 0.1)
+        send_key_active(VK_ESCAPE, 0.1)
         time.sleep(0.5)
-        send_key_active(win32con.VK_ESCAPE, 0.1)
+        send_key_active(VK_ESCAPE, 0.1)
         time.sleep(1.0)
 
         check_and_close_map()
 
         walk_time = random.uniform(1.5, 2.5)
-        print(f"[*] Иду вперед {walk_time:.2f} сек...")
-        send_key_active(0x57, walk_time)
-        time.sleep(1.2)
+
+        # ПЕРВЫЙ проход вперёд
+        print(f"[*] Иду вперед {walk_time:.2f} сек... (первый проход)")
+        send_key_active(VK_W, walk_time)
+        time.sleep(0.2)
+
+        # Первый поворот (кд ≈ TURN_GAP_MEAN_FIRST)
+        perform_turn_sequence(TURN_GAP_MEAN_FIRST)
+
+        # ВТОРОЙ проход вперёд
+        print(f"[*] Иду вперед {walk_time:.2f} сек... (второй проход)")
+        send_key_active(VK_W, walk_time)
+        time.sleep(0.2)
+
+        # Второй поворот (кд уменьшён до TURN_GAP_MEAN_SECOND)
+        perform_turn_sequence(TURN_GAP_MEAN_SECOND)
+
+        # После второго разворота не идём вперёд — продолжаем обычный цикл (smart_state_recovery и т.д.)
+        print("[*] Второй разворот выполнен — не продолжаю движение вперёд.")
+
+        # Небольшая пауза перед дальнейшими проверками
+        time.sleep(0.5)
 
         smart_state_recovery()
 
