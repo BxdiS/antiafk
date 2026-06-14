@@ -174,20 +174,33 @@ public sealed class AntiAfkEngine
 
         _stateDetector.SmartStateRecovery();
         RestoreUserWindow("Startup");
+        NormalizeBackgroundPhaseAfterRecovery();
 
+        _logger.Info($"Engine ready. Resuming from phase: {_progress.Phase}");
+    }
+
+    private void NormalizeBackgroundPhaseAfterRecovery()
+    {
         if (_progress.Phase is EnginePhase.Idle or EnginePhase.WaitingForGame or EnginePhase.Initializing)
         {
             _progress.Phase = EnginePhase.BackgroundCategoryClick;
+            _progress.PhaseDeadlineUtc = null;
+            return;
         }
 
-        _logger.Info($"Engine ready. Resuming from phase: {_progress.Phase}");
+        if (_progress.Phase is EnginePhase.BackgroundCategoryWait or EnginePhase.BackgroundAdClick or EnginePhase.BackgroundAdWait)
+        {
+            _logger.Info($"Background phase {_progress.Phase} reset to category click after marketplace recovery.");
+            _progress.Phase = EnginePhase.BackgroundCategoryClick;
+            _progress.PhaseDeadlineUtc = null;
+        }
     }
 
     private async Task RunCycleAsync(CancellationToken cancellationToken)
     {
         var timings = _configService.Current.Timings;
 
-        while (_progress.Phase != EnginePhase.BackgroundCategoryClick && !cancellationToken.IsCancellationRequested)
+        while (ShouldResumeActivePhase(_progress.Phase) && !cancellationToken.IsCancellationRequested)
         {
             await ExecuteCurrentPhaseAsync(cancellationToken);
         }
@@ -212,15 +225,15 @@ public sealed class AntiAfkEngine
                     .ToArray();
                 var index = available[_random.Next(available.Length)];
                 _progress.LastButtonIndex = index;
-                _logger.Info($"[Background] Category click #{index + 1}");
                 var button = _coordinates.Buttons[index];
+                _logger.Info($"[Background] Category click #{index + 1} at ({button.X}, {button.Y})");
                 _inputService.MoveAndClickBackground(_gameHandle, button.X, button.Y);
                 _progress.Phase = EnginePhase.BackgroundCategoryWait;
-                _progress.PhaseDeadlineUtc = DateTime.UtcNow.AddSeconds(timings.BackgroundClickDelay.Sample(_random));
+                SchedulePhaseDelay(timings.BackgroundClickDelay, "ad click");
             }
             else if (_progress.Phase == EnginePhase.BackgroundCategoryWait)
             {
-                if (DateTime.UtcNow >= _progress.PhaseDeadlineUtc)
+                if (IsPhaseDeadlineReached())
                 {
                     _progress.Phase = EnginePhase.BackgroundAdClick;
                 }
@@ -238,7 +251,7 @@ public sealed class AntiAfkEngine
                 _inputService.MoveAndClickBackground(_gameHandle, adX, adY);
                 _progress.IsInAd = true;
                 _progress.Phase = EnginePhase.BackgroundAdWait;
-                _progress.PhaseDeadlineUtc = DateTime.UtcNow.AddSeconds(timings.BackgroundClickDelay.Sample(_random));
+                SchedulePhaseDelay(timings.BackgroundClickDelay, "active cycle");
             }
             else
             {
@@ -254,7 +267,7 @@ public sealed class AntiAfkEngine
         switch (_progress.Phase)
         {
             case EnginePhase.BackgroundAdWait:
-                if (DateTime.UtcNow >= _progress.PhaseDeadlineUtc)
+                if (IsPhaseDeadlineReached())
                 {
                     _progress.Phase = EnginePhase.ActiveFocus;
                 }
@@ -343,7 +356,7 @@ public sealed class AntiAfkEngine
                 break;
 
             case EnginePhase.CycleSleep:
-                if (DateTime.UtcNow >= _progress.PhaseDeadlineUtc)
+                if (IsPhaseDeadlineReached())
                 {
                     _progress.Phase = EnginePhase.BackgroundCategoryClick;
                 }
@@ -401,6 +414,25 @@ public sealed class AntiAfkEngine
         }
 
         return string.IsNullOrWhiteSpace(window.Title) ? "(untitled app)" : $"\"{window.Title}\"";
+    }
+
+    private static bool ShouldResumeActivePhase(EnginePhase phase) => phase switch
+    {
+        EnginePhase.ActiveFocus or EnginePhase.ExitAd or EnginePhase.CloseMarketplace
+            or EnginePhase.CheckMap or EnginePhase.WalkFirst or EnginePhase.TurnFirst
+            or EnginePhase.WalkSecond or EnginePhase.TurnSecond or EnginePhase.StateRecovery
+            or EnginePhase.ReturnFocus or EnginePhase.CycleSleep => true,
+        _ => false
+    };
+
+    private bool IsPhaseDeadlineReached() =>
+        _progress.PhaseDeadlineUtc is null || DateTime.UtcNow >= _progress.PhaseDeadlineUtc.Value;
+
+    private void SchedulePhaseDelay(RandomRange delayRange, string nextStep)
+    {
+        var delaySeconds = delayRange.Sample(_random);
+        _progress.PhaseDeadlineUtc = DateTime.UtcNow.AddSeconds(delaySeconds);
+        _logger.Info($"[Background] Waiting {delaySeconds:F0}s before {nextStep}...");
     }
 
     private void PerformTurnSequence(double gapMean)

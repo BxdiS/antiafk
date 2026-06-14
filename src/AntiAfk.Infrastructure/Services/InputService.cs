@@ -30,9 +30,15 @@ public sealed class InputService : IInputService
 
     public void MoveAndClickBackground(IntPtr windowHandle, int clientX, int clientY)
     {
-        var screen = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
-        var startX = _random.Next(100, Math.Max(101, screen.Width - 100));
-        var startY = _random.Next(100, Math.Max(101, screen.Height - 100));
+        if (!NativeMethods.GetClientRect(windowHandle, out var clientRect))
+        {
+            clientRect = new NativeMethods.Rect { Right = 1920, Bottom = 1080 };
+        }
+
+        var clientWidth = Math.Max(1, clientRect.Right - clientRect.Left);
+        var clientHeight = Math.Max(1, clientRect.Bottom - clientRect.Top);
+        var startX = _random.Next(20, Math.Max(21, clientWidth - 20));
+        var startY = _random.Next(20, Math.Max(21, clientHeight - 20));
         var steps = _random.Next(15, 26);
 
         for (var i = 0; i < steps; i++)
@@ -40,7 +46,7 @@ public sealed class InputService : IInputService
             var t = Math.Sin((i / (double)(steps - 1)) * Math.PI / 2);
             var currentX = (int)(startX + (clientX - startX) * t);
             var currentY = (int)(startY + (clientY - startY) * t);
-            NativeMethods.PostMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, NativeMethods.MakeLParam(currentX, currentY));
+            SendMouseMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, NativeMethods.MakeLParam(currentX, currentY));
             Thread.Sleep(10);
         }
 
@@ -48,11 +54,11 @@ public sealed class InputService : IInputService
         var finalY = clientY + _random.Next(-4, 5);
         var lParam = NativeMethods.MakeLParam(finalX, finalY);
 
-        NativeMethods.PostMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, lParam);
+        SendMouseMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, lParam);
         Thread.Sleep(50);
-        NativeMethods.PostMessage(windowHandle, NativeMethods.WmLbuttondown, (IntPtr)NativeMethods.MkLbutton, lParam);
+        SendMouseMessage(windowHandle, NativeMethods.WmLbuttondown, (IntPtr)NativeMethods.MkLbutton, lParam);
         Thread.Sleep(TimeSpan.FromMilliseconds(_random.Next(70, 151)));
-        NativeMethods.PostMessage(windowHandle, NativeMethods.WmLbuttonup, IntPtr.Zero, lParam);
+        SendMouseMessage(windowHandle, NativeMethods.WmLbuttonup, IntPtr.Zero, lParam);
     }
 
     public void ClickScreen(int screenX, int screenY)
@@ -69,5 +75,10 @@ public sealed class InputService : IInputService
         _windowService.ForceForeground(gameHandle);
         Thread.Sleep(150);
         ClickScreen(screenX, screenY);
+    }
+
+    private static void SendMouseMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam)
+    {
+        NativeMethods.SendMessage(windowHandle, message, wParam, lParam);
     }
 }
