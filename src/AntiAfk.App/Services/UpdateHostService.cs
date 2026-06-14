@@ -41,16 +41,19 @@ public sealed class UpdateHostService : IUpdateService
         {
             var settings = _configService.Current.Update;
             var repoUrl = $"https://github.com/{settings.GitHubOwner}/{settings.GitHubRepo}";
+            _logger.Info($"Update source: {repoUrl}");
+
             var source = new GithubSource(repoUrl, null, prerelease: false);
             _manager = new UpdateManager(source);
 
             if (!_manager.IsInstalled)
             {
-                _logger.Info("Updates are available only in the Velopack-installed build.");
+                _logger.Warning("Updates work only after installing via Setup.exe (Velopack). dotnet run / copied exe cannot auto-update.");
                 return;
             }
 
             IsSupported = true;
+            _logger.Info($"Installed version: {_manager.CurrentVersion}");
 
             if (_manager.UpdatePendingRestart is not null)
             {
@@ -62,7 +65,7 @@ public sealed class UpdateHostService : IUpdateService
         }
         catch (NotInstalledException)
         {
-            _logger.Info("Updates are available only in the Velopack-installed build.");
+            _logger.Warning("Updates work only after installing via Setup.exe (Velopack).");
         }
         catch (Exception ex)
         {
@@ -127,6 +130,7 @@ public sealed class UpdateHostService : IUpdateService
             var update = await _manager.CheckForUpdatesAsync();
             if (update is null)
             {
+                _logger.Info($"No update available. Current version: {_manager.CurrentVersion}");
                 SetAvailability(UpdateAvailability.None);
                 return;
             }
