@@ -8,13 +8,14 @@ namespace AntiAfk.Infrastructure.Services;
 
 public sealed class WindowService : IWindowService
 {
-    private static readonly Regex MajesticTitlePattern = new(
+    // Window title format required by the GTA V multiplayer client (version in parentheses).
+    private static readonly Regex GameTitlePattern = new(
         @"^Majestic Multiplayer\s*\(.+\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public GameWindowInfo? FindGameWindow()
     {
-        var byTitle = FindByMajesticTitle();
+        var byTitle = FindByGameTitle();
         if (byTitle is not null)
         {
             return byTitle;
@@ -23,7 +24,7 @@ public sealed class WindowService : IWindowService
         return FindByGtaProcess();
     }
 
-    private static GameWindowInfo? FindByMajesticTitle()
+    private static GameWindowInfo? FindByGameTitle()
     {
         GameWindowInfo? bestMatch = null;
         var bestArea = 0L;
@@ -36,7 +37,7 @@ public sealed class WindowService : IWindowService
             }
 
             var title = NativeMethods.GetWindowTitle(hWnd);
-            if (string.IsNullOrWhiteSpace(title) || !MajesticTitlePattern.IsMatch(title))
+            if (string.IsNullOrWhiteSpace(title) || !GameTitlePattern.IsMatch(title))
             {
                 return true;
             }

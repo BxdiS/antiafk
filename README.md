@@ -1,184 +1,116 @@
-# 🎮 Marketplace Anti-AFK | Маркетплейс Anti-AFK
+# AntiAFK
 
 ## 🇷🇺 Русский
 
 ### Описание
-Приложение для Majestic Multiplayer (Windows), предотвращающее отключение персонажа по неактивности (AFK) через имитацию активности на маркетплейсе.
+Windows-приложение для GTA V multiplayer, предотвращающее отключение персонажа по неактивности (AFK) через имитацию активности на маркетплейсе.
 
-Переписано на **C# / .NET 8** с архитектурой для масштабирования:
+Стек: **C# / .NET 8**
 - `AntiAfk.Core` — логика движка, координаты, состояние цикла
 - `AntiAfk.Infrastructure` — WinAPI, захват экрана, конфиг, логи
-- `AntiAfk.App` — трей (WinForms) + настройки (WPF)
+- `AntiAfk.App` — трей (WinForms) + настройки (WPF) + Velopack обновления
 
 ### Требования
 - **Windows 10/11 x64**
-- Для сборки: **.NET 8 SDK** (или новее)
+- **.NET 8 SDK** для сборки
 - Игра в **16:9**, оконный режим без рамки (FHD / 2K / 4K — авто-масштабирование)
 
-### Сборка и запуск
+### Сборка и запуск (разработка)
 
 ```bash
-git clone https://github.com/BxdiS/antiafk-majestic.git
-cd antiafk-majestic
+git clone https://github.com/BxdiS/antiafk.git
+cd antiafk
 dotnet build src/AntiAfk.App/AntiAfk.App.csproj
 dotnet run --project src/AntiAfk.App/AntiAfk.App.csproj
 ```
 
-### Публикация (один self-contained .exe)
+### Установка для пользователей
 
-```bash
-dotnet publish src/AntiAfk.App/AntiAfk.App.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
-```
-
-Готовый файл: `src/AntiAfk.App/bin/Release/net8.0-windows/win-x64/publish/AntiAfk.exe`
+Скачай **`AntiAFK-win-Setup.exe`** из [GitHub Releases](https://github.com/BxdiS/antiafk/releases) и установи.
 
 ### Управление из трея
+
 | Пункт | Действие |
 |-------|----------|
-| **Запустить / Остановить** | Старт/стоп бота. При остановке сохраняется фаза цикла и продолжение с того же места |
-| **Иконка** | 🟢 работает · 🟡 ожидание игры · 🔴 остановлен / ошибка |
-| **Настройки** | Язык (RU/EN), путь к Majestic Launcher, тайминги |
+| **Запустить / Остановить** | Старт/стоп бота с сохранением фазы цикла |
+| **Иконка** | 🟢 работает · 🟡 ожидание игры · 🔴 остановлен · 🔵 обновление |
+| **Обновить** | Появляется при доступном обновлении, применяет скачанный апдейт |
+| **Настройки** | Язык (RU/EN), путь к лаунчеру игры |
 | **Открыть лог** | `%AppData%\AntiAfk\logs\` |
 | **Выход** | Полное закрытие приложения |
 
+### Авто-обновления (Velopack)
+
+- Проверка при запуске + каждые N часов (`config.json`)
+- Скачивание в фоне автоматически
+- Синяя иконка в трее + пункт **Обновить** в контекстном меню
+- Если не скачалось во время работы бота — скачается при следующем запуске
+- Обновления видны только после **публикации** релиза (не draft)
+
+### Релизы (для разработчика)
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+CI создаёт **draft** релиз → редактируешь changelog → **Publish**.
+
+Подробно: [RELEASE.md](RELEASE.md)
+
 ### Конфигурация
-Файл: `%AppData%\AntiAfk\config.json` (plain JSON)
 
-Состояние цикла (resume): `%AppData%\AntiAfk\engine_state.json`
+`%AppData%\AntiAfk\config.json` · Состояние цикла: `engine_state.json`
 
-Координаты UI **не редактируются** — зашиты в коде (`GameConstants`), масштабируются по размеру окна игры.
-
-### Как это работает
-- Находит окно `Grand Theft Auto V` / `Majestic Multiplayer`
-- Если игра не найдена — запускает **Majestic Launcher** (путь в настройках или авто-поиск)
-- Фоновые клики по маркетплейсу через `PostMessage` (без захвата фокуса)
-- Активные действия: ходьба, повороты, ESC, восстановление UI по пикселям
-- При смене разрешения окна — уведомление пользователю
-- При падении worker — авторестарт через 3 сек
-
-### Авто-обновления (план)
-Рекомендуемый стек для **бесшовных** обновлений без участия пользователя:
-
-1. **[Velopack](https://github.com/velopack/velopack)** — современная замена Squirrel для .NET
-2. **GitHub Releases** — CI публикует `RELEASES` + delta-пакеты
-3. **Фоновая проверка** каждые N часов (настройка в `config.json`)
-4. **Применение при перезапуске** или тихий restart в трее (Velopack умеет apply-on-exit)
-
-Схема:
-```
-GitHub Actions (tag v1.2.3)
-  → dotnet publish
-  → vpk pack + upload to Release
-  → клиент: Velopack.CheckForUpdatesAsync()
-  → скачать в фоне → ApplyUpdatesAndRestart() при простое бота
-```
-
-Пользователь ничего не делает: обновление скачивается в фоне, применяется при следующем перезапуске приложения или когда бот остановлен.
-
-### Подпись кода / SmartScreen
-Бесплатных **доверенных** сертификатов для физлиц практически нет. Варианты:
-
-| Вариант | Стоимость | SmartScreen |
-|---------|-----------|-------------|
-| **SignPath Foundation** | Бесплатно для open-source | ✅ Доверенная подпись |
-| Self-signed | Бесплатно | ❌ Предупреждение остаётся |
-| Накопление репутации | Бесплатно | ⚠️ Со временем смягчается при одном издателе |
-
-**Рекомендация для этого репозитория:** подать заявку в [SignPath](https://signpath.org/) (OSS, бесплатно) → подписывать релизы в CI → SmartScreen перестанет ругаться после нескольких скачиваний.
-
-### Идеи на будущее (Roadmap)
-- [ ] Автозапуск бота при старте Windows
-- [ ] Авто-запуск Majestic Launcher по кнопке «Старт» → последний сервер
-- [ ] Автовыбор персонажа и спавн в заданной точке
-- [ ] Telegram-бот (уведомления + удалённое управление)
-- [ ] Планировщик (работа только в заданные часы)
-- [ ] Velopack авто-обновления из GitHub Releases
-- [ ] Расширенное логирование и debug-режим
+### Roadmap
+- [ ] Автозапуск с Windows
+- [ ] Авто-запуск лаунчера игры по кнопке «Старт»
+- [ ] Telegram-бот
+- [ ] Планировщик
+- [ ] Подпись кода (SignPath)
 
 ### Внимание ⚠️
-- Используй на свой риск
-- Может быть обнаружено системой защиты сервера
-
-### Legacy
-Старая Python-версия: `legacy/python/`
+Используй на свой риск. Может быть обнаружено системой защиты сервера.
 
 ---
 
 ## 🇬🇧 English
 
 ### Description
-Windows app for Majestic Multiplayer that prevents AFK disconnects by simulating marketplace activity.
-
-Rewritten in **C# / .NET 8** with scalable architecture:
-- `AntiAfk.Core` — engine logic, coordinates, cycle state
-- `AntiAfk.Infrastructure` — WinAPI, screen capture, config, logging
-- `AntiAfk.App` — tray (WinForms) + settings (WPF)
-
-### Requirements
-- **Windows 10/11 x64**
-- **.NET 8 SDK** for building
-- Game in **16:9 borderless windowed** (FHD / 2K / 4K auto-scaling)
+Windows app for GTA V multiplayer that prevents AFK disconnects via marketplace activity simulation.
 
 ### Build & Run
 
 ```bash
-git clone https://github.com/BxdiS/antiafk-majestic.git
-cd antiafk-majestic
+git clone https://github.com/BxdiS/antiafk.git
+cd antiafk
 dotnet build src/AntiAfk.App/AntiAfk.App.csproj
 dotnet run --project src/AntiAfk.App/AntiAfk.App.csproj
 ```
 
-### Publish (self-contained single .exe)
+### Install
 
-```bash
-dotnet publish src/AntiAfk.App/AntiAfk.App.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
-```
+Download **`AntiAFK-win-Setup.exe`** from [GitHub Releases](https://github.com/BxdiS/antiafk/releases).
 
-Output: `src/AntiAfk.App/bin/Release/net8.0-windows/win-x64/publish/AntiAfk.exe`
+### Tray
 
-### Tray controls
 | Item | Action |
 |------|--------|
-| **Start / Stop** | Start/stop bot. Stops save cycle phase for resume |
-| **Icon** | 🟢 running · 🟡 waiting for game · 🔴 stopped / error |
-| **Settings** | Language (RU/EN), Majestic Launcher path, timings |
+| **Start / Stop** | Start/stop bot with cycle resume |
+| **Icon** | 🟢 running · 🟡 waiting · 🔴 stopped · 🔵 update |
+| **Update** | Appears when update is available, applies downloaded update |
+| **Settings** | Language (RU/EN), game launcher path |
 | **Open log** | `%AppData%\AntiAfk\logs\` |
-| **Exit** | Fully quit the app |
+| **Exit** | Quit app |
 
-### Configuration
-`%AppData%\AntiAfk\config.json` (plain JSON)
+### Auto-updates
 
-Cycle resume state: `%AppData%\AntiAfk\engine_state.json`
-
-UI coordinates are **developer-defined** in code (`GameConstants`), scaled to game window size.
-
-### Auto-updates (planned)
-Recommended stack for **seamless** user-free updates:
-
-1. **[Velopack](https://github.com/velopack/velopack)** + **GitHub Releases**
-2. Background check every N hours
-3. Download in background, apply on app restart or when bot is idle
-
-### Code signing / SmartScreen
-For open-source projects, apply for free signing via **[SignPath Foundation](https://signpath.org/)**. Self-signed certs do not bypass SmartScreen.
-
-### Roadmap
-- [ ] Auto-start with Windows
-- [ ] Launch Majestic Launcher on Start → last server
-- [ ] Auto character select + spawn point
-- [ ] Telegram bot
-- [ ] Scheduler
-- [ ] Velopack auto-updates
-- [ ] Advanced logging
+Velopack + GitHub Releases. Background download, blue tray icon, **Update** menu item. See [RELEASE.md](RELEASE.md).
 
 ### Warning ⚠️
-- Use at your own risk
-- May be detected by server anti-cheat
-
-### Legacy
-Old Python version: `legacy/python/`
+Use at your own risk.
 
 ---
 
-### 📝 License
-Created for Majestic RP community
+### Legacy
+Old Python version: `legacy/python/`

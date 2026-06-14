@@ -5,6 +5,7 @@ obj/
 *.suo
 .vs/
 publish/
+Releases/
 __pycache__/
 *.py[codz]
 *$py.class

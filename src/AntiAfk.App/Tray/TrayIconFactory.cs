@@ -20,6 +20,11 @@ public static class TrayIconFactory
         return CreateStatusIcon(Color.FromArgb(250, 204, 21));
     }
 
+    public static Icon CreateUpdateIcon()
+    {
+        return CreateStatusIcon(Color.FromArgb(59, 130, 246));
+    }
+
     private static Icon CreateStatusIcon(Color color)
     {
         using var bitmap = new Bitmap(32, 32);

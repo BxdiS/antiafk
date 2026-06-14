@@ -1,3 +1,5 @@
+using AntiAfk.Core.Constants;
+
 namespace AntiAfk.Core.Models;
 
 public sealed class AppConfig
@@ -13,8 +15,8 @@ public sealed class AppConfig
 public sealed class UpdateSettings
 {
     public bool Enabled { get; set; } = true;
-    public string GitHubOwner { get; set; } = "BxdiS";
-    public string GitHubRepo { get; set; } = "antiafk-majestic";
+    public string GitHubOwner { get; set; } = UpdateConstants.GitHubOwner;
+    public string GitHubRepo { get; set; } = UpdateConstants.GitHubRepo;
     public int CheckIntervalHours { get; set; } = 6;
 }
 

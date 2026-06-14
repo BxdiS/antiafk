@@ -22,7 +22,7 @@
   "update": {
     "enabled": true,
     "gitHubOwner": "BxdiS",
-    "gitHubRepo": "antiafk-majestic",
+    "gitHubRepo": "antiafk",
     "checkIntervalHours": 6
   }
 }

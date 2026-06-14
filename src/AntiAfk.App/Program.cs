@@ -4,16 +4,21 @@ using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Engine;
 using AntiAfk.Infrastructure.Localization;
 using AntiAfk.Infrastructure.Services;
+using Velopack;
 
 namespace AntiAfk.App;
 
 internal static class Program
 {
-    private const string MutexName = "Global\\AntiAfk.Majestic.SingleInstance";
+    private const string MutexName = "Global\\AntiAfk.SingleInstance";
 
     [STAThread]
     private static void Main()
     {
+        VelopackApp.Build()
+            .SetAutoApplyOnStartup(false)
+            .Run();
+
         using var mutex = new Mutex(true, MutexName, out var createdNew);
         if (!createdNew)
         {
@@ -59,9 +64,11 @@ internal static class Program
             runtime);
 
         var engineHost = new EngineHostService(engine, progressStore, logger, localization);
+        var updateService = new UpdateHostService(configService, logger);
+        _ = updateService.InitializeAsync();
 
         logger.Info("Anti-AFK started.");
 
-        return new TrayApplicationContext(engineHost, localization, configService, logger);
+        return new TrayApplicationContext(engineHost, updateService, localization, configService, logger);
     }
 }

@@ -119,12 +119,12 @@ public sealed class AntiAfkEngine
 
         SetStatus(EngineStatus.WaitingForGame);
         _progress.Phase = EnginePhase.WaitingForGame;
-        _logger.Warning("Game window not found (Majestic Multiplayer title or GTA5.exe process). Launching Majestic Launcher...");
+        _logger.Warning("Game window not found. Launching game launcher...");
 
         var launched = await _gameLauncher.TryLaunchAsync(cancellationToken);
         if (!launched)
         {
-            _logger.Warning("Failed to launch Majestic RP launcher.");
+            _logger.Warning("Failed to launch game launcher.");
             await DelaySeconds(10, cancellationToken);
             return false;
         }

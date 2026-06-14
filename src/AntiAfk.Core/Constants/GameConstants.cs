@@ -28,5 +28,4 @@ public static class GameConstants
     public static readonly (int X, int Y) BaseMpPixel = (1770, 34);
 
     public const string GameProcessName = "GTA5";
-    public const string GameWindowTitlePrefix = "Majestic Multiplayer";
 }

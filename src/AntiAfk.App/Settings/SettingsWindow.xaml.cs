@@ -61,7 +61,7 @@ public partial class SettingsWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "Executable (*.exe)|*.exe",
-            FileName = "Majestic Launcher.exe",
+            FileName = "Launcher.exe",
             InitialDirectory = Path.GetDirectoryName(LauncherPathResolver.DefaultLauncherPath)
         };
 

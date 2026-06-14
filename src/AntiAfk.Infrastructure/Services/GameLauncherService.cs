@@ -21,7 +21,7 @@ public sealed class GameLauncherService : IGameLauncher
         var path = LauncherPathResolver.Resolve(_configService.Current.LauncherPath);
         if (path is null)
         {
-            _logger.Warning($"Majestic Launcher not found. Expected: {LauncherPathResolver.DefaultLauncherPath}");
+            _logger.Warning($"Game launcher not found. Expected: {LauncherPathResolver.DefaultLauncherPath}");
             return Task.FromResult(false);
         }
 

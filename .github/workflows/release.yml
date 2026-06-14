@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  VPK_VERSION: '1.2.0'
+  PACK_ID: antiafk
+  PROJECT_PATH: src/AntiAfk.App/AntiAfk.App.csproj
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Packaging AntiAFK v$VERSION"
+
+      - name: Set version in csproj
+        shell: pwsh
+        run: |
+          $csproj = "${{ env.PROJECT_PATH }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $content = Get-Content $csproj -Raw
+          if ($content -match '<Version>.*?</Version>') {
+            $content = $content -replace '<Version>.*?</Version>', "<Version>$version</Version>"
+          } else {
+            $content = $content -replace '(<PropertyGroup>)', "`$1`r`n    <Version>$version</Version>"
+          }
+          Set-Content $csproj $content -NoNewline
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish application
+        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -o publish -r win-x64 --self-contained true
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Download previous release
+        continue-on-error: true
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pack release
+        run: vpk pack -u ${{ env.PACK_ID }} -v ${{ steps.version.outputs.version }} -p publish --mainExe AntiAfk.exe --packTitle AntiAFK
+
+      - name: Upload draft release
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --tag ${{ github.ref_name }}
+          --releaseName AntiAFK v${{ steps.version.outputs.version }}
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          NOTES=$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="${{ github.ref_name }}" \
+            -f target_commitish=main \
+            --jq .body)
+          gh release edit "${{ github.ref_name }}" --notes "$NOTES"
+
+      - name: Release summary
+        shell: bash
+        run: |
+          echo "### Draft release created" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: \`${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: **draft** (edit notes and publish manually)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Open release on GitHub](https://github.com/${{ github.repository }}/releases)" >> "$GITHUB_STEP_SUMMARY"
