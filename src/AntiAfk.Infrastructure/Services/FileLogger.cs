@@ -14,11 +14,13 @@ public sealed class FileLogger : IAppLogger, IDisposable
             "AntiAfk",
             "logs");
         Directory.CreateDirectory(directory);
-        LogFilePath = Path.Combine(directory, $"antiafk-{DateTime.Now:yyyy-MM-dd}.log");
-        _writer = new StreamWriter(new FileStream(LogFilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+        LogFilePath = Path.Combine(directory, $"antiafk-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+        _writer = new StreamWriter(new FileStream(LogFilePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
         {
             AutoFlush = true
         };
+
+        Write("INFO", $"--- Session started {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---");
     }
 
     public string LogFilePath { get; }
@@ -38,7 +40,7 @@ public sealed class FileLogger : IAppLogger, IDisposable
 
     private void Write(string level, string message)
     {
-        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
+        var line = $"{DateTime.Now:HH:mm:ss.fff} [{level}] {message}";
         lock (_sync)
         {
             _writer.WriteLine(line);
@@ -47,6 +49,7 @@ public sealed class FileLogger : IAppLogger, IDisposable
 
     public void Dispose()
     {
+        Write("INFO", $"--- Session ended {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---");
         _writer.Dispose();
     }
 }

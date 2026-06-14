@@ -6,6 +6,12 @@ namespace AntiAfk.Infrastructure.Win32;
 internal static class NativeMethods
 {
     public const int SwRestore = 9;
+    public const int SwShow = 5;
+    public static readonly IntPtr HwndTopmost = new(-1);
+    public static readonly IntPtr HwndNotopmost = new(-2);
+    public const uint SwpNomove = 0x0002;
+    public const uint SwpNosize = 0x0001;
+    public const uint SwpShowwindow = 0x0040;
     public const uint KeyeventfKeyup = 0x0002;
     public const int WmMousemove = 0x0200;
     public const int WmLbuttondown = 0x0201;
@@ -61,6 +67,28 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int x,
+        int y,
+        int cx,
+        int cy,
+        uint uFlags);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct Rect

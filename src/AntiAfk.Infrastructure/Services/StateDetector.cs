@@ -2,8 +2,6 @@ using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
 
-// ReSharper disable once RedundantUsingDirective
-
 namespace AntiAfk.Infrastructure.Services;
 
 public sealed class StateDetector : IStateDetector
@@ -31,6 +29,7 @@ public sealed class StateDetector : IStateDetector
     public bool CheckAndCloseWarning()
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
+        var gameHandle = RequireGameHandle();
         var found = _screenCapture.RegionContainsColor(
             coords.WarnBoxX1,
             coords.WarnBoxY1,
@@ -44,7 +43,7 @@ public sealed class StateDetector : IStateDetector
         }
 
         _logger.Warning($"Warehouse notification detected. Clicking ({coords.WarnClickX}, {coords.WarnClickY})...");
-        _inputService.ClickScreen(coords.WarnClickX, coords.WarnClickY);
+        _inputService.ClickScreenOnGame(gameHandle, coords.WarnClickX, coords.WarnClickY);
         Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().WarningClickDelay));
         return true;
     }
@@ -52,11 +51,12 @@ public sealed class StateDetector : IStateDetector
     public bool CheckAndCloseMap()
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
+        var gameHandle = RequireGameHandle();
         var (r, g, b) = _screenCapture.GetPixelColor(coords.MapPixelX, coords.MapPixelY);
         if (r > 200 && g < 40 && b is >= 80 and <= 140)
         {
             _logger.Warning("Map menu detected. Closing with ESC...");
-            _inputService.SendKey(NativeKeys.Escape, 0.1);
+            _inputService.SendKeyToGame(gameHandle, NativeKeys.Escape, 0.1);
             Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().MapCloseDelay));
             return true;
         }
@@ -68,6 +68,7 @@ public sealed class StateDetector : IStateDetector
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var timings = _timingsProvider();
+        var gameHandle = RequireGameHandle();
 
         _logger.Info("Analyzing UI state...");
 
@@ -90,22 +91,35 @@ public sealed class StateDetector : IStateDetector
         if (rHud >= 200 && gHud <= 60 && bHud is >= 80 and <= 170)
         {
             _logger.Info("Status: In game. Opening tablet and marketplace...");
-            OpenMarketplace(coords, timings);
+            OpenMarketplace(gameHandle, coords, timings);
             return;
         }
 
         _logger.Warning($"Status: Unknown (HUD: {rHud},{gHud},{bHud} | MP: {rMp},{gMp},{bMp}). Trying default open...");
-        OpenMarketplace(coords, timings);
+        OpenMarketplace(gameHandle, coords, timings);
     }
 
-    private void OpenMarketplace(ScaledCoordinates coords, TimingSettings timings)
+    private void OpenMarketplace(IntPtr gameHandle, ScaledCoordinates coords, TimingSettings timings)
     {
-        _inputService.SendKey(NativeKeys.Down, 0.1);
+        _logger.Info("Opening tablet (Down arrow)...");
+        _inputService.SendKeyToGame(gameHandle, NativeKeys.Down, 0.1);
         Thread.Sleep(TimeSpan.FromSeconds(timings.TabletOpenDelay));
-        _inputService.ClickScreen(coords.CenterX, coords.CenterY);
+        _logger.Info($"Clicking center ({coords.CenterX}, {coords.CenterY})...");
+        _inputService.ClickScreenOnGame(gameHandle, coords.CenterX, coords.CenterY);
         Thread.Sleep(TimeSpan.FromSeconds(1.0));
-        _inputService.ClickScreen(coords.IconX, coords.IconY);
+        _logger.Info($"Clicking marketplace icon ({coords.IconX}, {coords.IconY})...");
+        _inputService.ClickScreenOnGame(gameHandle, coords.IconX, coords.IconY);
         Thread.Sleep(TimeSpan.FromSeconds(timings.MarketplaceOpenDelay));
         CheckAndCloseWarning();
+    }
+
+    private IntPtr RequireGameHandle()
+    {
+        if (_runtime.GameHandle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Game window handle is not initialized.");
+        }
+
+        return _runtime.GameHandle;
     }
 }

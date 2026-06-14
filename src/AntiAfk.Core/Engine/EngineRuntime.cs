@@ -5,4 +5,5 @@ namespace AntiAfk.Core.Engine;
 public sealed class EngineRuntime
 {
     public ScaledCoordinates? Coordinates { get; set; }
+    public IntPtr GameHandle { get; set; }
 }

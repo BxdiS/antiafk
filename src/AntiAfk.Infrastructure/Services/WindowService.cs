@@ -126,12 +126,71 @@ public sealed class WindowService : IWindowService
 
     public void ForceForeground(IntPtr handle)
     {
+        if (handle == IntPtr.Zero || !NativeMethods.IsWindow(handle))
+        {
+            return;
+        }
+
+        if (NativeMethods.GetForegroundWindow() == handle)
+        {
+            return;
+        }
+
+        NativeMethods.ShowWindow(handle, NativeMethods.SwRestore);
+
+        var foreground = NativeMethods.GetForegroundWindow();
+        var foregroundThread = NativeMethods.GetWindowThreadProcessId(foreground, out _);
+        var targetThread = NativeMethods.GetWindowThreadProcessId(handle, out _);
+        var currentThread = NativeMethods.GetCurrentThreadId();
+
+        var attachedForeground = false;
+        var attachedTarget = false;
+
         try
         {
-            NativeMethods.ShowWindow(handle, NativeMethods.SwRestore);
+            if (foregroundThread != 0 && foregroundThread != currentThread)
+            {
+                attachedForeground = NativeMethods.AttachThreadInput(currentThread, foregroundThread, true);
+            }
+
+            if (targetThread != 0 && targetThread != currentThread)
+            {
+                attachedTarget = NativeMethods.AttachThreadInput(currentThread, targetThread, true);
+            }
+
+            NativeMethods.BringWindowToTop(handle);
+            NativeMethods.SetWindowPos(
+                handle,
+                NativeMethods.HwndTopmost,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpShowwindow);
+            NativeMethods.SetWindowPos(
+                handle,
+                NativeMethods.HwndNotopmost,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpShowwindow);
             NativeMethods.SetForegroundWindow(handle);
         }
-        catch
+        finally
+        {
+            if (attachedTarget)
+            {
+                NativeMethods.AttachThreadInput(currentThread, targetThread, false);
+            }
+
+            if (attachedForeground)
+            {
+                NativeMethods.AttachThreadInput(currentThread, foregroundThread, false);
+            }
+        }
+
+        if (NativeMethods.GetForegroundWindow() != handle)
         {
             NativeMethods.keybd_event(0x12, 0, 0, UIntPtr.Zero);
             NativeMethods.SetForegroundWindow(handle);

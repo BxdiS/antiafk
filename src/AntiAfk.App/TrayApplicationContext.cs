@@ -173,6 +173,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.Dispose();
         _engineHost.Dispose();
         _updateService.Dispose();
+        (_logger as IDisposable)?.Dispose();
         ExitThread();
     }
 

@@ -5,7 +5,13 @@ namespace AntiAfk.Infrastructure.Services;
 
 public sealed class InputService : IInputService
 {
+    private readonly IWindowService _windowService;
     private readonly Random _random = new();
+
+    public InputService(IWindowService windowService)
+    {
+        _windowService = windowService;
+    }
 
     public void SendKey(ushort virtualKey, double durationSeconds)
     {
@@ -13,6 +19,13 @@ public sealed class InputService : IInputService
         NativeMethods.keybd_event((byte)virtualKey, scanCode, 0, UIntPtr.Zero);
         Thread.Sleep(TimeSpan.FromSeconds(durationSeconds));
         NativeMethods.keybd_event((byte)virtualKey, scanCode, NativeMethods.KeyeventfKeyup, UIntPtr.Zero);
+    }
+
+    public void SendKeyToGame(IntPtr gameHandle, ushort virtualKey, double durationSeconds)
+    {
+        _windowService.ForceForeground(gameHandle);
+        Thread.Sleep(150);
+        SendKey(virtualKey, durationSeconds);
     }
 
     public void MoveAndClickBackground(IntPtr windowHandle, int clientX, int clientY)
@@ -49,5 +62,12 @@ public sealed class InputService : IInputService
         NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
         Thread.Sleep(80);
         NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+    }
+
+    public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY)
+    {
+        _windowService.ForceForeground(gameHandle);
+        Thread.Sleep(150);
+        ClickScreen(screenX, screenY);
     }
 }

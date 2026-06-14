@@ -43,7 +43,7 @@ internal static class Program
 
         var runtime = new EngineRuntime();
         var windowService = new WindowService();
-        var inputService = new InputService();
+        var inputService = new InputService(windowService);
         var screenCapture = new ScreenCaptureService();
         var stateDetector = new StateDetector(
             screenCapture,

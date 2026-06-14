@@ -21,6 +21,7 @@ public sealed class AntiAfkEngine
     private ScaledCoordinates _coordinates = null!;
     private EngineProgress _progress = new();
     private string _gameTitle = string.Empty;
+    private bool _startupRecoveryPending = true;
 
     public event Action<EngineStatus>? StatusChanged;
     public event Action<string>? UserNotificationRequested;
@@ -49,6 +50,7 @@ public sealed class AntiAfkEngine
     public void LoadProgress(EngineProgress progress)
     {
         _progress = progress;
+        _startupRecoveryPending = true;
     }
 
     public EngineProgress CreateProgressSnapshot() => new()
@@ -76,9 +78,10 @@ public sealed class AntiAfkEngine
                     continue;
                 }
 
-                if (_progress.Phase is EnginePhase.Idle or EnginePhase.WaitingForGame or EnginePhase.Initializing)
+                if (_startupRecoveryPending)
                 {
-                    await InitializeAsync(cancellationToken);
+                    await RunStartupRecoveryAsync(cancellationToken);
+                    _startupRecoveryPending = false;
                 }
 
                 await RunCycleAsync(cancellationToken);
@@ -150,14 +153,14 @@ public sealed class AntiAfkEngine
     {
         _gameHandle = game.Handle;
         _gameTitle = game.Title;
+        _runtime.GameHandle = game.Handle;
         _logger.Info($"Connected to game window: {_gameTitle} ({game.Width}x{game.Height})");
         ApplyScaling(game);
     }
 
-    private async Task InitializeAsync(CancellationToken cancellationToken)
+    private async Task RunStartupRecoveryAsync(CancellationToken cancellationToken)
     {
-        _progress.Phase = EnginePhase.Initializing;
-        _logger.Info("Initial state recovery...");
+        _logger.Info("Startup: focusing game window and preparing marketplace...");
 
         _userHandle = _windowService.GetForegroundWindow();
         _windowService.ForceForeground(_gameHandle);
@@ -165,13 +168,18 @@ public sealed class AntiAfkEngine
 
         _stateDetector.SmartStateRecovery();
 
-        if (_userHandle != IntPtr.Zero)
+        if (_userHandle != IntPtr.Zero && _userHandle != _gameHandle)
         {
             _windowService.ForceForeground(_userHandle);
+            _logger.Info("Returned focus to previous window.");
         }
 
-        _progress.Phase = EnginePhase.BackgroundCategoryClick;
-        _logger.Info("Engine entered working loop.");
+        if (_progress.Phase is EnginePhase.Idle or EnginePhase.WaitingForGame or EnginePhase.Initializing)
+        {
+            _progress.Phase = EnginePhase.BackgroundCategoryClick;
+        }
+
+        _logger.Info($"Engine ready. Resuming from phase: {_progress.Phase}");
     }
 
     private async Task RunCycleAsync(CancellationToken cancellationToken)
@@ -188,7 +196,9 @@ public sealed class AntiAfkEngine
             if (!_windowService.IsWindowValid(_gameHandle))
             {
                 _gameHandle = IntPtr.Zero;
+                _runtime.GameHandle = IntPtr.Zero;
                 _progress.Phase = EnginePhase.WaitingForGame;
+                _startupRecoveryPending = true;
                 return;
             }
 
@@ -265,7 +275,7 @@ public sealed class AntiAfkEngine
                 if (_progress.IsInAd)
                 {
                     _logger.Info("Leaving ad view (ESC)...");
-                    _inputService.SendKey(NativeKeys.Escape, 0.1);
+                    _inputService.SendKeyToGame(_gameHandle, NativeKeys.Escape, 0.1);
                     await DelaySeconds(timings.EscDelay, cancellationToken);
                     _progress.IsInAd = false;
                 }
@@ -274,9 +284,9 @@ public sealed class AntiAfkEngine
 
             case EnginePhase.CloseMarketplace:
                 _logger.Info("Closing marketplace (ESC x2)...");
-                _inputService.SendKey(NativeKeys.Escape, 0.1);
+                _inputService.SendKeyToGame(_gameHandle, NativeKeys.Escape, 0.1);
                 await DelaySeconds(timings.EscDelay, cancellationToken);
-                _inputService.SendKey(NativeKeys.Escape, 0.1);
+                _inputService.SendKeyToGame(_gameHandle, NativeKeys.Escape, 0.1);
                 await DelaySeconds(1.0, cancellationToken);
                 _progress.Phase = EnginePhase.CheckMap;
                 break;
@@ -289,7 +299,7 @@ public sealed class AntiAfkEngine
 
             case EnginePhase.WalkFirst:
                 _logger.Info($"Walking forward {_progress.PendingWalkSeconds:F2}s (first pass)");
-                _inputService.SendKey(NativeKeys.W, _progress.PendingWalkSeconds);
+                _inputService.SendKeyToGame(_gameHandle, NativeKeys.W, _progress.PendingWalkSeconds);
                 await DelaySeconds(timings.PostWalkDelay, cancellationToken);
                 _progress.PendingTurnGapMean = timings.TurnGapMeanFirst;
                 _progress.Phase = EnginePhase.TurnFirst;
@@ -303,7 +313,7 @@ public sealed class AntiAfkEngine
 
             case EnginePhase.WalkSecond:
                 _logger.Info($"Walking forward {_progress.PendingWalkSeconds:F2}s (second pass)");
-                _inputService.SendKey(NativeKeys.W, _progress.PendingWalkSeconds);
+                _inputService.SendKeyToGame(_gameHandle, NativeKeys.W, _progress.PendingWalkSeconds);
                 await DelaySeconds(timings.PostWalkDelay, cancellationToken);
                 _progress.PendingTurnGapMean = timings.TurnGapMeanSecond;
                 _progress.Phase = EnginePhase.TurnSecond;
@@ -317,6 +327,8 @@ public sealed class AntiAfkEngine
                 break;
 
             case EnginePhase.StateRecovery:
+                _windowService.ForceForeground(_gameHandle);
+                await DelaySeconds(0.3, cancellationToken);
                 _stateDetector.SmartStateRecovery();
                 _progress.Phase = EnginePhase.ReturnFocus;
                 break;
@@ -357,11 +369,11 @@ public sealed class AntiAfkEngine
         var gap2 = _random.NextDouble() * (jitter * 2) + Math.Max(0.01, gapMean - jitter);
 
         _logger.Info($"Turn sequence: A({durA:F2}s) -> {gap1:F2}s -> S({durS:F2}s) -> {gap2:F2}s -> C({durC:F2}s)");
-        _inputService.SendKey(NativeKeys.A, durA);
+        _inputService.SendKeyToGame(_gameHandle, NativeKeys.A, durA);
         Thread.Sleep(TimeSpan.FromSeconds(gap1));
-        _inputService.SendKey(NativeKeys.S, durS);
+        _inputService.SendKeyToGame(_gameHandle, NativeKeys.S, durS);
         Thread.Sleep(TimeSpan.FromSeconds(gap2));
-        _inputService.SendKey(NativeKeys.C, durC);
+        _inputService.SendKeyToGame(_gameHandle, NativeKeys.C, durC);
         Thread.Sleep(TimeSpan.FromSeconds(timings.TurnKeyDuration.Sample(_random)));
     }
 
