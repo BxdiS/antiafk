@@ -1,0 +1,28 @@
+{
+  "language": "ru",
+  "launcherPath": "",
+  "timings": {
+    "backgroundClickDelay": { "min": 25, "max": 30 },
+    "cycleSleepDelay": { "min": 180, "max": 360 },
+    "walkDuration": { "min": 1.5, "max": 2.5 },
+    "turnKeyDuration": { "min": 0.08, "max": 0.18 },
+    "turnGapJitter": { "min": 0.5, "max": 0.5 },
+    "turnGapMeanFirst": 5.0,
+    "turnGapMeanSecond": 4.0,
+    "focusSwitchDelay": 0.8,
+    "initFocusDelay": 1.0,
+    "marketplaceOpenDelay": 4.5,
+    "tabletOpenDelay": 1.5,
+    "escDelay": 0.5,
+    "warningClickDelay": 1.0,
+    "mapCloseDelay": 1.0,
+    "postTurnDelay": 0.5,
+    "postWalkDelay": 0.2
+  },
+  "update": {
+    "enabled": true,
+    "gitHubOwner": "BxdiS",
+    "gitHubRepo": "antiafk-majestic",
+    "checkIntervalHours": 6
+  }
+}

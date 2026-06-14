@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AntiAfk.Core/AntiAfk.Core.csproj" />
+    <Project Path="src/AntiAfk.Infrastructure/AntiAfk.Infrastructure.csproj" />
+    <Project Path="src/AntiAfk.App/AntiAfk.App.csproj" />
+  </Folder>
+</Solution>

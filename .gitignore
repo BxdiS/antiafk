@@ -1,4 +1,10 @@
-# Byte-compiled / optimized / DLL files
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+publish/
 __pycache__/
 *.py[codz]
 *$py.class
