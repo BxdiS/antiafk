@@ -32,7 +32,9 @@ public sealed class LocalizationService
           "settings.launcher_path": "Путь к лаунчеру игры",
           "settings.save": "Сохранить",
           "settings.cancel": "Отмена",
-          "settings.browse": "Обзор"
+          "settings.browse": "Обзор",
+          "settings.credits": "Автор BxdiS · github.com/BxdiS/antiafk · GPL-3.0",
+          "tray.about": "О программе"
         }
         """);
 
@@ -59,7 +61,9 @@ public sealed class LocalizationService
           "settings.launcher_path": "Game launcher path",
           "settings.save": "Save",
           "settings.cancel": "Cancel",
-          "settings.browse": "Browse"
+          "settings.browse": "Browse",
+          "settings.credits": "Author BxdiS · github.com/BxdiS/antiafk · GPL-3.0",
+          "tray.about": "About"
         }
         """);
     }

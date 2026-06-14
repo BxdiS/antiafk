@@ -23,6 +23,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _updateItem;
     private readonly ToolStripMenuItem _settingsItem;
     private readonly ToolStripMenuItem _openLogItem;
+    private readonly ToolStripMenuItem _aboutItem;
     private readonly ToolStripMenuItem _exitItem;
 
     private SettingsWindow? _settingsWindow;
@@ -53,6 +54,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _updateItem = new ToolStripMenuItem();
         _settingsItem = new ToolStripMenuItem();
         _openLogItem = new ToolStripMenuItem();
+        _aboutItem = new ToolStripMenuItem();
         _exitItem = new ToolStripMenuItem();
 
         _notifyIcon = new NotifyIcon
@@ -92,12 +94,14 @@ public sealed class TrayApplicationContext : ApplicationContext
         _updateItem.Click += async (_, _) => await ApplyUpdateAsync();
         _settingsItem.Click += (_, _) => OpenSettings();
         _openLogItem.Click += (_, _) => OpenLog();
+        _aboutItem.Click += (_, _) => ShowAbout();
         _exitItem.Click += async (_, _) => await ExitAsync();
 
         menu.Items.Add(_startStopItem);
         menu.Items.Add(_updateItem);
         menu.Items.Add(_settingsItem);
         menu.Items.Add(_openLogItem);
+        menu.Items.Add(_aboutItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_exitItem);
         return menu;
@@ -141,6 +145,15 @@ public sealed class TrayApplicationContext : ApplicationContext
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    private void ShowAbout()
+    {
+        MessageBox.Show(
+            _localization.Get("settings.credits"),
+            AppBranding.DisplayName,
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 
     private void OpenLog()
@@ -238,6 +251,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         _settingsItem.Text = _localization.Get("tray.settings");
         _openLogItem.Text = _localization.Get("tray.open_log");
+        _aboutItem.Text = _localization.Get("tray.about");
         _exitItem.Text = _localization.Get("tray.exit");
     }
 

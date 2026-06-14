@@ -9,7 +9,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AntiAFK</AssemblyName>
     <RootNamespace>AntiAfk.App</RootNamespace>
+    <ApplicationTitle>AntiAFK</ApplicationTitle>
+    <Product>AntiAFK</Product>
+    <Company>BxdiS</Company>
+    <Description>AntiAFK marketplace activity bot</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Version>1.0.0</Version>
   </PropertyGroup>
 
@@ -21,6 +26,10 @@
   <ItemGroup>
     <ProjectReference Include="..\AntiAfk.Core\AntiAfk.Core.csproj" />
     <ProjectReference Include="..\AntiAfk.Infrastructure\AntiAfk.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
   <ItemGroup>

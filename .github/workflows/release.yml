@@ -49,6 +49,9 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Generate app icon
+        run: dotnet run --project tools/GenerateAppIcon/GenerateAppIcon.csproj -- src/AntiAfk.App/Assets/app.ico
+
       - name: Publish application
         run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -o publish -r win-x64 --self-contained true
 
@@ -60,7 +63,7 @@ jobs:
         run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pack release
-        run: vpk pack -u ${{ env.PACK_ID }} -v ${{ steps.version.outputs.version }} -p publish --mainExe AntiAFK.exe --packTitle AntiAFK
+        run: vpk pack -u ${{ env.PACK_ID }} -v ${{ steps.version.outputs.version }} -p publish --mainExe AntiAFK.exe --packTitle AntiAFK --packAuthors BxdiS --icon src/AntiAfk.App/Assets/app.ico --noPortable --shortcuts Desktop,StartMenuRoot
 
       - name: Upload draft release
         shell: pwsh

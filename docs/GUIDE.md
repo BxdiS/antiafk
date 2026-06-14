@@ -112,10 +112,37 @@ git push origin v1.0.0
 ```bash
 dotnet publish src/AntiAfk.App/AntiAfk.App.csproj -c Release -o publish -r win-x64 --self-contained true
 dotnet tool install -g vpk --version 1.2.0
-vpk pack -u antiafk -v 1.0.0 -p publish --mainExe AntiAFK.exe --packTitle AntiAFK
+vpk pack -u antiafk -v 1.0.0 -p publish --mainExe AntiAFK.exe --packTitle AntiAFK --icon src/AntiAfk.App/Assets/app.ico --noPortable
 ```
 
 Артефакты — в папке `Releases/`.
+
+### Файлы в GitHub Release
+
+| Файл | Нужен пользователю? | Зачем |
+|------|----------------------|-------|
+| `AntiAFK-win-Setup.exe` | **Да** | Установка для новых пользователей |
+| `antiafk-1.0.0-full.nupkg` | Нет (скачивает клиент) | Пакет обновления для Velopack |
+| `releases.win.json` | Нет (читает клиент) | Индекс версий для авто-апдейта |
+| `RELEASES` | Нет | Legacy-формат Squirrel, можно игнорировать |
+| `*-Portable.zip` | Нет | Портативная версия; отключена флагом `--noPortable` |
+
+> **Важно:** `.nupkg`, `releases.win.json` и `RELEASES` нельзя удалять из релиза — без них авто-обновление не работает. Пользователям достаточно скачать только Setup.exe.
+
+### Release notes
+
+Автогенерация GitHub часто даёт только ссылку на changelog. Перед **Publish** замените описание на понятный текст. Пример — [docs/RELEASE_NOTES.example.md](RELEASE_NOTES.example.md):
+
+```markdown
+# AntiAFK v1.0.1
+
+## Установка
+Скачайте **AntiAFK-win-Setup.exe**.
+
+## Что нового
+- Исправлен ...
+- Добавлен ...
+```
 
 ## Подпись кода (SignPath)
 

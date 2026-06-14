@@ -4,6 +4,7 @@
         Title="AntiAFK — Logs"
         Height="520"
         Width="820"
+        Icon="pack://application:,,,/Assets/app.ico"
         MinHeight="280"
         MinWidth="480"
         WindowStartupLocation="CenterScreen"

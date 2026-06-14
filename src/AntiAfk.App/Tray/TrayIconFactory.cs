@@ -5,25 +5,17 @@ namespace AntiAfk.App.Tray;
 
 public static class TrayIconFactory
 {
-    public static Icon CreateRunningIcon()
-    {
-        return CreateStatusIcon(Color.FromArgb(34, 197, 94));
-    }
+    public static Icon CreateRunningIcon() =>
+        CreateStatusIcon(Color.FromArgb(34, 197, 94));
 
-    public static Icon CreateStoppedIcon()
-    {
-        return CreateStatusIcon(Color.FromArgb(239, 68, 68));
-    }
+    public static Icon CreateStoppedIcon() =>
+        CreateStatusIcon(Color.FromArgb(239, 68, 68));
 
-    public static Icon CreateWaitingIcon()
-    {
-        return CreateStatusIcon(Color.FromArgb(250, 204, 21));
-    }
+    public static Icon CreateWaitingIcon() =>
+        CreateStatusIcon(Color.FromArgb(250, 204, 21));
 
-    public static Icon CreateUpdateIcon()
-    {
-        return CreateStatusIcon(Color.FromArgb(59, 130, 246));
-    }
+    public static Icon CreateUpdateIcon() =>
+        CreateStatusIcon(Color.FromArgb(59, 130, 246));
 
     private static Icon CreateStatusIcon(Color color)
     {

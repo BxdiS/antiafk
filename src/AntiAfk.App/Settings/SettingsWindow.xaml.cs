@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Models;
 using AntiAfk.Infrastructure.Localization;
 using AntiAfk.Infrastructure.Services;
@@ -29,13 +30,13 @@ public partial class SettingsWindow : Window
 
     private void ApplyTexts()
     {
-        Title = _localization.Get("settings.title");
-        TitleText.Text = _localization.Get("settings.title");
+        Title = AppBranding.DisplayName;
         LanguageLabel.Text = _localization.Get("settings.language");
         LauncherPathLabel.Text = _localization.Get("settings.launcher_path");
         SaveButton.Content = _localization.Get("settings.save");
         CancelButton.Content = _localization.Get("settings.cancel");
         BrowseButton.Content = _localization.Get("settings.browse");
+        CreditsText.Text = _localization.Get("settings.credits");
     }
 
     private void LoadValues()

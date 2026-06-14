@@ -14,6 +14,8 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        ShellIntegration.Register();
+
         VelopackApp.Build()
             .SetAutoApplyOnStartup(false)
             .Run();
