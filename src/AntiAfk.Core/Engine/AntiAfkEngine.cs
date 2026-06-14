@@ -17,7 +17,8 @@ public sealed class AntiAfkEngine
     private readonly Random _random = new();
 
     private IntPtr _gameHandle;
-    private IntPtr _userHandle;
+    private UserWindowInfo? _userWindow;
+    private UserWindowInfo? _pendingUserWindow;
     private ScaledCoordinates _coordinates = null!;
     private EngineProgress _progress = new();
     private string _gameTitle = string.Empty;
@@ -51,6 +52,11 @@ public sealed class AntiAfkEngine
     {
         _progress = progress;
         _startupRecoveryPending = true;
+    }
+
+    public void SetPendingUserWindow(UserWindowInfo? userWindow)
+    {
+        _pendingUserWindow = userWindow;
     }
 
     public EngineProgress CreateProgressSnapshot() => new()
@@ -162,17 +168,12 @@ public sealed class AntiAfkEngine
     {
         _logger.Info("Startup: focusing game window and preparing marketplace...");
 
-        _userHandle = _windowService.GetForegroundWindow();
+        RememberUserWindow();
         _windowService.ForceForeground(_gameHandle);
         await DelaySeconds(_configService.Current.Timings.InitFocusDelay, cancellationToken);
 
         _stateDetector.SmartStateRecovery();
-
-        if (_userHandle != IntPtr.Zero && _userHandle != _gameHandle)
-        {
-            _windowService.ForceForeground(_userHandle);
-            _logger.Info("Returned focus to previous window.");
-        }
+        RestoreUserWindow("Startup");
 
         if (_progress.Phase is EnginePhase.Idle or EnginePhase.WaitingForGame or EnginePhase.Initializing)
         {
@@ -265,7 +266,7 @@ public sealed class AntiAfkEngine
 
             case EnginePhase.ActiveFocus:
                 _logger.Info("Taking focus for active actions...");
-                _userHandle = _windowService.GetForegroundWindow();
+                RememberUserWindow();
                 _windowService.ForceForeground(_gameHandle);
                 await DelaySeconds(timings.FocusSwitchDelay, cancellationToken);
                 _progress.Phase = EnginePhase.ExitAd;
@@ -334,11 +335,7 @@ public sealed class AntiAfkEngine
                 break;
 
             case EnginePhase.ReturnFocus:
-                if (_userHandle != IntPtr.Zero)
-                {
-                    _logger.Info("Returning focus to user.");
-                    _windowService.ForceForeground(_userHandle);
-                }
+                RestoreUserWindow("Cycle");
                 var sleepSeconds = timings.CycleSleepDelay.Sample(_random);
                 _logger.Info($"Cycle complete. Sleeping {sleepSeconds / 60:F2} min.");
                 _progress.Phase = EnginePhase.CycleSleep;
@@ -356,6 +353,54 @@ public sealed class AntiAfkEngine
                 }
                 break;
         }
+    }
+
+    private void RememberUserWindow()
+    {
+        if (_pendingUserWindow is not null)
+        {
+            _userWindow = _pendingUserWindow;
+            _pendingUserWindow = null;
+            _logger.Info($"Saved user window: {DescribeUserWindow(_userWindow)}");
+            return;
+        }
+
+        var captured = _windowService.CaptureUserWindow(_gameHandle);
+        if (captured is null)
+        {
+            _logger.Warning("Could not detect a user window to restore later.");
+            return;
+        }
+
+        _userWindow = captured;
+        _logger.Info($"Saved user window: {DescribeUserWindow(_userWindow)}");
+    }
+
+    private void RestoreUserWindow(string context)
+    {
+        if (_userWindow is null)
+        {
+            _logger.Warning($"{context}: no saved user window to restore.");
+            return;
+        }
+
+        if (_windowService.TryRestoreUserWindow(_userWindow, _gameHandle))
+        {
+            _logger.Info($"{context}: returned focus to {DescribeUserWindow(_userWindow)}.");
+            return;
+        }
+
+        _logger.Warning($"{context}: could not restore focus to {DescribeUserWindow(_userWindow)}.");
+    }
+
+    private static string DescribeUserWindow(UserWindowInfo? window)
+    {
+        if (window is null)
+        {
+            return "(none)";
+        }
+
+        return string.IsNullOrWhiteSpace(window.Title) ? "(untitled app)" : $"\"{window.Title}\"";
     }
 
     private void PerformTurnSequence(double gapMean)

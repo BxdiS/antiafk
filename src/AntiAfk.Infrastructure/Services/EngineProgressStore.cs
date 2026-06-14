@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 
 namespace AntiAfk.Infrastructure.Services;
@@ -15,7 +16,7 @@ public sealed class EngineProgressStore
 
     public EngineProgressStore(string? filePath = null)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntiAfk");
+        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppBranding.AppDataFolder);
         Directory.CreateDirectory(directory);
         _filePath = filePath ?? Path.Combine(directory, "engine_state.json");
     }

@@ -17,6 +17,7 @@ internal static class NativeMethods
     public const int WmLbuttondown = 0x0201;
     public const int WmLbuttonup = 0x0202;
     public const int MkLbutton = 0x0001;
+    public const uint GwHwndPrev = 3;
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -64,6 +65,12 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
@@ -114,6 +121,13 @@ internal static class NativeMethods
 
         var builder = new StringBuilder(length + 1);
         _ = GetWindowText(hWnd, builder, builder.Capacity);
+        return builder.ToString();
+    }
+
+    public static string GetWindowClassName(IntPtr hWnd)
+    {
+        var builder = new StringBuilder(256);
+        _ = GetClassName(hWnd, builder, builder.Capacity);
         return builder.ToString();
     }
 }

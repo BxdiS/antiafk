@@ -112,7 +112,7 @@ git push origin v1.0.0
 ```bash
 dotnet publish src/AntiAfk.App/AntiAfk.App.csproj -c Release -o publish -r win-x64 --self-contained true
 dotnet tool install -g vpk --version 1.2.0
-vpk pack -u antiafk -v 1.0.0 -p publish --mainExe AntiAfk.exe --packTitle AntiAFK
+vpk pack -u antiafk -v 1.0.0 -p publish --mainExe AntiAFK.exe --packTitle AntiAFK
 ```
 
 Артефакты — в папке `Releases/`.

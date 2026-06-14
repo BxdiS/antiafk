@@ -8,6 +8,7 @@ public sealed class EngineHostService : IDisposable
 {
     private readonly AntiAfkEngine _engine;
     private readonly EngineProgressStore _progressStore;
+    private readonly IWindowService _windowService;
     private readonly IAppLogger _logger;
     private readonly AntiAfk.Infrastructure.Localization.LocalizationService _localization;
 
@@ -21,11 +22,13 @@ public sealed class EngineHostService : IDisposable
     public EngineHostService(
         AntiAfkEngine engine,
         EngineProgressStore progressStore,
+        IWindowService windowService,
         IAppLogger logger,
         AntiAfk.Infrastructure.Localization.LocalizationService localization)
     {
         _engine = engine;
         _progressStore = progressStore;
+        _windowService = windowService;
         _logger = logger;
         _localization = localization;
 
@@ -53,6 +56,7 @@ public sealed class EngineHostService : IDisposable
         }
 
         _engine.LoadProgress(progress);
+        _engine.SetPendingUserWindow(_windowService.CaptureUserWindow(IntPtr.Zero));
         _cts = new CancellationTokenSource();
         _isRunning = true;
         _workerTask = Task.Run(() => RunWorkerAsync(_cts.Token));

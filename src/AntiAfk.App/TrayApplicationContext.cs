@@ -1,12 +1,12 @@
-using System.Diagnostics;
-using System.IO;
 using AntiAfk.App.Services;
 using AntiAfk.App.Settings;
 using AntiAfk.App.Tray;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Updates;
 using AntiAfk.Infrastructure.Localization;
+using AntiAfk.Infrastructure.Services;
 
 namespace AntiAfk.App;
 
@@ -68,7 +68,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _engineHost.UserNotificationRequested += message => _uiContext.Post(_ =>
         {
-            _notifyIcon.BalloonTipTitle = "Anti-AFK";
+            _notifyIcon.BalloonTipTitle = AppBranding.DisplayName;
             _notifyIcon.BalloonTipText = message;
             _notifyIcon.ShowBalloonTip(3000);
         }, null);
@@ -145,20 +145,11 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            if (!File.Exists(_logger.LogFilePath))
-            {
-                File.WriteAllText(_logger.LogFilePath, string.Empty);
-            }
-
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = _logger.LogFilePath,
-                UseShellExecute = true
-            });
+            ConsoleHost.Show();
         }
         catch (Exception ex)
         {
-            _logger.Error("Failed to open log file.", ex);
+            _logger.Error("Failed to open log console.", ex);
         }
     }
 

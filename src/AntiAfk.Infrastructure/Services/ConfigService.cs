@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Models;
 
 namespace AntiAfk.Infrastructure.Services;
@@ -20,7 +21,7 @@ public sealed class ConfigService : IConfigService
     public ConfigService(string? configFilePath = null)
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var directory = Path.Combine(appData, "AntiAfk");
+        var directory = Path.Combine(appData, AppBranding.AppDataFolder);
         Directory.CreateDirectory(directory);
         _configFilePath = configFilePath ?? Path.Combine(directory, "config.json");
         _current = LoadOrCreate();

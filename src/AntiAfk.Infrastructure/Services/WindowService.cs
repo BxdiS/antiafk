@@ -8,6 +8,33 @@ namespace AntiAfk.Infrastructure.Services;
 
 public sealed class WindowService : IWindowService
 {
+    private static readonly int CurrentProcessId = Environment.ProcessId;
+
+    private static readonly HashSet<string> ExcludedWindowClasses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Shell_TrayWnd",
+        "Shell_SecondaryTrayWnd",
+        "DV2ControlHost",
+        "Windows.UI.Core.CoreWindow",
+        "ForegroundStaging",
+        "NotifyIconOverflowWindow",
+        "TopLevelWindowForOverflowXamlIsland",
+        "XamlExplorerHostIslandWindow",
+        "#32768",
+        "DropDown",
+        "Progman",
+        "WorkerW"
+    };
+
+    private static readonly HashSet<string> AllowedUntitledClasses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Chrome_WidgetWin_1",
+        "MozillaWindowClass",
+        "ApplicationFrameWindow",
+        "OpWindow",
+        "CASCADIA_HOSTING_WINDOW_CLASS"
+    };
+
     // Window title format required by the GTA V multiplayer client (version in parentheses).
     private static readonly Regex GameTitlePattern = new(
         @"^Majestic Multiplayer\s*\(.+\)",
@@ -196,6 +223,171 @@ public sealed class WindowService : IWindowService
             NativeMethods.SetForegroundWindow(handle);
             NativeMethods.keybd_event(0x12, 0, NativeMethods.KeyeventfKeyup, UIntPtr.Zero);
         }
+    }
+
+    public UserWindowInfo? CaptureUserWindow(IntPtr gameHandle)
+    {
+        for (var handle = NativeMethods.GetForegroundWindow();
+             handle != IntPtr.Zero;
+             handle = NativeMethods.GetWindow(handle, NativeMethods.GwHwndPrev))
+        {
+            if (TryCreateUserWindowInfo(handle, gameHandle, out var info))
+            {
+                return info;
+            }
+        }
+
+        UserWindowInfo? best = null;
+        var bestArea = 0L;
+
+        NativeMethods.EnumWindows((hWnd, _) =>
+        {
+            if (!TryCreateUserWindowInfo(hWnd, gameHandle, out var info))
+            {
+                return true;
+            }
+
+            if (!NativeMethods.GetWindowRect(hWnd, out var rect))
+            {
+                return true;
+            }
+
+            var area = (long)(rect.Right - rect.Left) * (rect.Bottom - rect.Top);
+            var hasTitle = string.IsNullOrWhiteSpace(info.Title) ? 0 : 1;
+            var score = hasTitle * 10_000_000_000L + area;
+            if (score <= bestArea)
+            {
+                return true;
+            }
+
+            bestArea = score;
+            best = info;
+            return true;
+        }, IntPtr.Zero);
+
+        return best;
+    }
+
+    public bool TryRestoreUserWindow(UserWindowInfo? userWindow, IntPtr gameHandle)
+    {
+        if (userWindow is null)
+        {
+            return false;
+        }
+
+        if (TryCreateUserWindowInfo(userWindow.Handle, gameHandle, out var current) &&
+            current.Handle == userWindow.Handle)
+        {
+            ForceForeground(userWindow.Handle);
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(userWindow.Title))
+        {
+            return false;
+        }
+
+        UserWindowInfo? match = null;
+        var bestArea = 0L;
+
+        NativeMethods.EnumWindows((hWnd, _) =>
+        {
+            if (!TryCreateUserWindowInfo(hWnd, gameHandle, out var info))
+            {
+                return true;
+            }
+
+            if (!string.Equals(info.Title, userWindow.Title, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (!NativeMethods.GetWindowRect(hWnd, out var rect))
+            {
+                return true;
+            }
+
+            var area = (long)(rect.Right - rect.Left) * (rect.Bottom - rect.Top);
+            if (area <= bestArea)
+            {
+                return true;
+            }
+
+            bestArea = area;
+            match = info;
+            return true;
+        }, IntPtr.Zero);
+
+        if (match is null)
+        {
+            return false;
+        }
+
+        ForceForeground(match.Handle);
+        return true;
+    }
+
+    private static bool TryCreateUserWindowInfo(IntPtr handle, IntPtr gameHandle, out UserWindowInfo info)
+    {
+        info = new UserWindowInfo(IntPtr.Zero, string.Empty);
+        if (handle == IntPtr.Zero || !NativeMethods.IsWindow(handle) || !NativeMethods.IsWindowVisible(handle))
+        {
+            return false;
+        }
+
+        if (gameHandle != IntPtr.Zero && handle == gameHandle)
+        {
+            return false;
+        }
+
+        NativeMethods.GetWindowThreadProcessId(handle, out var processId);
+        if ((int)processId == CurrentProcessId)
+        {
+            return false;
+        }
+
+        if (processId != 0)
+        {
+            try
+            {
+                using var process = Process.GetProcessById((int)processId);
+                if (string.Equals(process.ProcessName, GameConstants.GameProcessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+            catch
+            {
+                // Process may exit between enumeration and lookup.
+            }
+        }
+
+        var className = NativeMethods.GetWindowClassName(handle);
+        if (ExcludedWindowClasses.Contains(className))
+        {
+            return false;
+        }
+
+        var title = NativeMethods.GetWindowTitle(handle);
+        if (string.IsNullOrWhiteSpace(title) && !AllowedUntitledClasses.Contains(className))
+        {
+            return false;
+        }
+
+        if (!NativeMethods.GetWindowRect(handle, out var rect))
+        {
+            return false;
+        }
+
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        if (width < 200 || height < 120)
+        {
+            return false;
+        }
+
+        info = new UserWindowInfo(handle, title);
+        return true;
     }
 
     public (int Width, int Height) GetScreenSize()

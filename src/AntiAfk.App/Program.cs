@@ -1,6 +1,7 @@
 using System.Threading;
 using AntiAfk.App.Services;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Infrastructure.Localization;
 using AntiAfk.Infrastructure.Services;
@@ -10,8 +11,6 @@ namespace AntiAfk.App;
 
 internal static class Program
 {
-    private const string MutexName = "Global\\AntiAfk.SingleInstance";
-
     [STAThread]
     private static void Main()
     {
@@ -19,12 +18,12 @@ internal static class Program
             .SetAutoApplyOnStartup(false)
             .Run();
 
-        using var mutex = new Mutex(true, MutexName, out var createdNew);
+        using var mutex = new Mutex(true, AppBranding.MutexName, out var createdNew);
         if (!createdNew)
         {
             MessageBox.Show(
-                "Anti-AFK is already running.",
-                "Anti-AFK",
+                $"{AppBranding.DisplayName} is already running.",
+                AppBranding.DisplayName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             return;
@@ -36,7 +35,8 @@ internal static class Program
 
     private static TrayApplicationContext CreateContext()
     {
-        var logger = new FileLogger();
+        var fileLogger = new FileLogger();
+        var logger = new CompositeLogger(fileLogger, new ConsoleLogger());
         var configService = new ConfigService();
         var localization = new LocalizationService();
         localization.SetLanguage(configService.Current.Language);
@@ -63,11 +63,11 @@ internal static class Program
             logger,
             runtime);
 
-        var engineHost = new EngineHostService(engine, progressStore, logger, localization);
+        var engineHost = new EngineHostService(engine, progressStore, windowService, logger, localization);
         var updateService = new UpdateHostService(configService, logger);
         _ = updateService.InitializeAsync();
 
-        logger.Info("Anti-AFK started.");
+        logger.Info($"{AppBranding.DisplayName} started. Log file: {fileLogger.LogFilePath}");
 
         return new TrayApplicationContext(engineHost, updateService, localization, configService, logger);
     }

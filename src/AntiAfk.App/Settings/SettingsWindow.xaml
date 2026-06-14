@@ -1,7 +1,7 @@
 <Window x:Class="AntiAfk.App.Settings.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Anti-AFK Settings"
+        Title="AntiAFK Settings"
         Height="280"
         Width="560"
         WindowStartupLocation="CenterScreen"

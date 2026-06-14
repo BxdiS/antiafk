@@ -1,4 +1,5 @@
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 
 namespace AntiAfk.Infrastructure.Services;
 
@@ -11,7 +12,7 @@ public sealed class FileLogger : IAppLogger, IDisposable
     {
         var directory = logDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AntiAfk",
+            AppBranding.AppDataFolder,
             "logs");
         Directory.CreateDirectory(directory);
         LogFilePath = Path.Combine(directory, $"antiafk-{DateTime.Now:yyyyMMdd-HHmmss}.log");
