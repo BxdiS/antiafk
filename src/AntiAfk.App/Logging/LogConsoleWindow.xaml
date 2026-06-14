@@ -1,0 +1,22 @@
+<Window x:Class="AntiAfk.App.Logging.LogConsoleWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AntiAFK — Logs"
+        Height="520"
+        Width="820"
+        MinHeight="280"
+        MinWidth="480"
+        WindowStartupLocation="CenterScreen"
+        Background="#0D1117">
+    <RichTextBox x:Name="LogView"
+                 Background="#0D1117"
+                 Foreground="#C9D1D9"
+                 FontFamily="Consolas"
+                 FontSize="13"
+                 IsReadOnly="True"
+                 BorderThickness="0"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 Padding="12,10"
+                 CaretBrush="#C9D1D9"/>
+</Window>

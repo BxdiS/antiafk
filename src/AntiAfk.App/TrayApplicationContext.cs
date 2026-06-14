@@ -6,7 +6,6 @@ using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Updates;
 using AntiAfk.Infrastructure.Localization;
-using AntiAfk.Infrastructure.Services;
 
 namespace AntiAfk.App;
 
@@ -18,6 +17,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly LocalizationService _localization;
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
+    private readonly LogConsoleService _logConsole;
 
     private readonly ToolStripMenuItem _startStopItem;
     private readonly ToolStripMenuItem _updateItem;
@@ -36,13 +36,15 @@ public sealed class TrayApplicationContext : ApplicationContext
         IUpdateService updateService,
         LocalizationService localization,
         IConfigService configService,
-        IAppLogger logger)
+        IAppLogger logger,
+        LogConsoleService logConsole)
     {
         _engineHost = engineHost;
         _updateService = updateService;
         _localization = localization;
         _configService = configService;
         _logger = logger;
+        _logConsole = logConsole;
         _uiContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
         _localization.SetLanguage(_configService.Current.Language);
@@ -145,7 +147,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            ConsoleHost.Show();
+            _logConsole.Show(_logger.LogFilePath);
         }
         catch (Exception ex)
         {
@@ -164,6 +166,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.Dispose();
         _engineHost.Dispose();
         _updateService.Dispose();
+        _logConsole.Close();
         (_logger as IDisposable)?.Dispose();
         ExitThread();
     }

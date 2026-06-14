@@ -36,7 +36,8 @@ internal static class Program
     private static TrayApplicationContext CreateContext()
     {
         var fileLogger = new FileLogger();
-        var logger = new CompositeLogger(fileLogger, new ConsoleLogger());
+        var logConsole = new LogConsoleService();
+        var logger = fileLogger;
         var configService = new ConfigService();
         var localization = new LocalizationService();
         localization.SetLanguage(configService.Current.Language);
@@ -69,6 +70,6 @@ internal static class Program
 
         logger.Info($"{AppBranding.DisplayName} started. Log file: {fileLogger.LogFilePath}");
 
-        return new TrayApplicationContext(engineHost, updateService, localization, configService, logger);
+        return new TrayApplicationContext(engineHost, updateService, localization, configService, logger, logConsole);
     }
 }
