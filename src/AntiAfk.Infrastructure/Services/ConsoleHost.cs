@@ -6,17 +6,28 @@ namespace AntiAfk.Infrastructure.Services;
 public static class ConsoleHost
 {
     private const int SwRestore = 9;
+    private const int CtrlCloseEvent = 2;
     private const int MaxSessionLines = 5000;
 
     private static readonly object Sync = new();
     private static readonly List<(string Line, ConsoleColor? Color)> SessionLines = new();
+    private static readonly ConsoleCtrlHandlerDelegate CloseHandler = OnConsoleControlEvent;
     private static IntPtr _consoleWindow = IntPtr.Zero;
+    private static bool _closeHandlerInstalled;
+
+    private delegate bool ConsoleCtrlHandlerDelegate(int ctrlType);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AllocConsole();
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FreeConsole();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetConsoleTitle(string lpConsoleTitle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetConsoleCtrlHandler(ConsoleCtrlHandlerDelegate handler, bool add);
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr GetConsoleWindow();
@@ -49,6 +60,11 @@ public static class ConsoleHost
         lock (Sync)
         {
             EnsureAttached();
+            if (_consoleWindow == IntPtr.Zero)
+            {
+                return;
+            }
+
             ShowWindow(_consoleWindow, SwRestore);
             SetForegroundWindow(_consoleWindow);
         }
@@ -83,18 +99,56 @@ public static class ConsoleHost
             return;
         }
 
+        InstallCloseHandler();
+        ConfigureConsoleStreams();
+
         SetConsoleTitle($"{AppBranding.DisplayName} — logs");
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
         _consoleWindow = GetConsoleWindow();
 
         WriteToConsole($"{AppBranding.DisplayName} console logging.", ConsoleColor.Gray);
-        WriteToConsole("Logs are also saved to the session file in AppData.", ConsoleColor.Gray);
+        WriteToConsole("Close this window to hide logs. AntiAFK keeps running in the tray.", ConsoleColor.Gray);
         WriteToConsole(string.Empty, null);
 
         foreach (var (line, color) in SessionLines)
         {
             WriteToConsole(line, color);
         }
+    }
+
+    private static void InstallCloseHandler()
+    {
+        if (_closeHandlerInstalled)
+        {
+            return;
+        }
+
+        if (SetConsoleCtrlHandler(CloseHandler, true))
+        {
+            _closeHandlerInstalled = true;
+        }
+    }
+
+    private static void ConfigureConsoleStreams()
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        var output = Console.OpenStandardOutput();
+        Console.SetOut(new StreamWriter(output, System.Text.Encoding.UTF8) { AutoFlush = true });
+    }
+
+    private static bool OnConsoleControlEvent(int ctrlType)
+    {
+        if (ctrlType != CtrlCloseEvent)
+        {
+            return false;
+        }
+
+        lock (Sync)
+        {
+            FreeConsole();
+            _consoleWindow = IntPtr.Zero;
+        }
+
+        return true;
     }
 
     private static void WriteToConsole(string line, ConsoleColor? color)
