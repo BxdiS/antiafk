@@ -63,12 +63,13 @@ jobs:
         run: vpk pack -u ${{ env.PACK_ID }} -v ${{ steps.version.outputs.version }} -p publish --mainExe AntiAFK.exe --packTitle AntiAFK
 
       - name: Upload draft release
-        run: >
-          vpk upload github
-          --repoUrl https://github.com/${{ github.repository }}
-          --token ${{ secrets.GITHUB_TOKEN }}
-          --tag ${{ github.ref_name }}
-          --releaseName AntiAFK v${{ steps.version.outputs.version }}
+        shell: pwsh
+        run: |
+          vpk upload github `
+            --repoUrl "https://github.com/${{ github.repository }}" `
+            --token "${{ secrets.GITHUB_TOKEN }}" `
+            --tag "${{ github.ref_name }}" `
+            --releaseName "AntiAFK v${{ steps.version.outputs.version }}"
 
       - name: Generate release notes
         env:
