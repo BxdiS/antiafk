@@ -4,7 +4,6 @@ public static class AppBranding
 {
     public const string DisplayName = "AntiAFK";
     public const string TechnicalId = "antiafk";
-    public const string AppDataFolder = "AntiAfk";
     public const string MutexName = "Global\\antiafk.SingleInstance";
     public const string AppUserModelId = "BxdiS.AntiAFK";
 }

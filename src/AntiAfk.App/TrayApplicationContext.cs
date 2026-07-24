@@ -26,7 +26,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _aboutItem;
     private readonly ToolStripMenuItem _exitItem;
 
-    private SettingsWindow? _settingsWindow;
+    private SettingsForm? _settingsWindow;
     private EngineStatus _engineStatus = EngineStatus.Stopped;
     private UpdateAvailability _updateAvailability = UpdateAvailability.None;
 
@@ -90,12 +90,12 @@ public sealed class TrayApplicationContext : ApplicationContext
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
-        _startStopItem.Click += async (_, _) => await ToggleEngineAsync();
-        _updateItem.Click += async (_, _) => await ApplyUpdateAsync();
-        _settingsItem.Click += (_, _) => OpenSettings();
-        _openLogItem.Click += (_, _) => OpenLog();
-        _aboutItem.Click += (_, _) => ShowAbout();
-        _exitItem.Click += async (_, _) => await ExitAsync();
+        _startStopItem.Click += async (_, _) => await SafeAsync(ToggleEngineAsync);
+        _updateItem.Click += async (_, _) => await SafeAsync(ApplyUpdateAsync);
+        _settingsItem.Click += (_, _) => Safe(OpenSettings);
+        _openLogItem.Click += (_, _) => Safe(OpenLog);
+        _aboutItem.Click += (_, _) => Safe(ShowAbout);
+        _exitItem.Click += async (_, _) => await SafeAsync(ExitAsync);
 
         menu.Items.Add(_startStopItem);
         menu.Items.Add(_updateItem);
@@ -135,14 +135,14 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenSettings()
     {
-        if (_settingsWindow is { IsLoaded: true })
+        if (_settingsWindow is { IsDisposed: false })
         {
             _settingsWindow.Activate();
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_configService, _localization);
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow = new SettingsForm(_configService, _localization);
+        _settingsWindow.FormClosed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -156,15 +156,29 @@ public sealed class TrayApplicationContext : ApplicationContext
             MessageBoxIcon.Information);
     }
 
-    private void OpenLog()
+    private void OpenLog() => _logConsole.Show(_logger);
+
+    private void Safe(Action action)
     {
         try
         {
-            _logConsole.Show(_logger.LogFilePath);
+            action();
         }
         catch (Exception ex)
         {
-            _logger.Error("Failed to open log console.", ex);
+            _logger.Error("Unhandled UI action error.", ex);
+        }
+    }
+
+    private async Task SafeAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Unhandled UI action error.", ex);
         }
     }
 
