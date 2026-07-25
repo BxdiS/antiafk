@@ -90,14 +90,17 @@ public sealed class AutoLoginService
 
     private async Task ClickMajesticLoginAsync(CancellationToken cancellationToken)
     {
-        // Wait for launcher to load (check pixel at 580, 200 ≈ e81c5a)
+        // Wait for launcher to load (check if window exists within bounds)
+        // Launcher window: left=410, top=170, right=1570, bottom=907
+        var windowBounds = (left: 410, top: 170, right: 1570, bottom: 907);
         var loaded = false;
         var attempts = 0;
         const int maxWaitAttempts = 120; // 60 seconds
 
         while (!loaded && attempts < maxWaitAttempts)
         {
-            if (IsPixelColor(580, 200, 0xe81c5a, tolerance: 30))
+            // Try to detect if launcher window is visible by checking a few pixels within the window
+            if (IsPixelColorSafe(windowBounds.left + 50, windowBounds.top + 50))
             {
                 loaded = true;
                 break;
@@ -109,32 +112,20 @@ public sealed class AutoLoginService
 
         if (!loaded)
         {
-            _logger.Warning("Launcher did not load within timeout (60 seconds), attempting click anyway");
+            _logger.Warning("Launcher window did not appear within timeout (60 seconds), but attempting click anyway");
         }
         else
         {
-            _logger.Info("Launcher detected as loaded");
+            _logger.Info("Launcher window detected");
         }
 
-        // Click login button at 967, 475 with retry logic
-        for (int i = 0; i < 3; i++)
-        {
-            _inputService.ClickScreen(967, 475);
-            _logger.Info($"Clicked login button (attempt {i + 1}/3)");
-            await Task.Delay(1500, cancellationToken);
+        // Click login button at 950, 487
+        const int loginButtonX = 950;
+        const int loginButtonY = 487;
 
-            // Verify click was successful by checking if we moved past login screen
-            if (!IsPixelColor(580, 200, 0xe81c5a, tolerance: 30))
-            {
-                _logger.Info("Login button click successful - launcher changed state");
-                break;
-            }
-
-            if (i < 2)
-            {
-                _logger.Warning("Login click did not change state, retrying...");
-            }
-        }
+        _inputService.ClickScreen(loginButtonX, loginButtonY);
+        _logger.Info($"Clicked login button at ({loginButtonX}, {loginButtonY})");
+        await Task.Delay(2000, cancellationToken);
     }
 
     private async Task WaitForGTA5Async(CancellationToken cancellationToken)
@@ -255,6 +246,19 @@ public sealed class AutoLoginService
             3 => (1333, 927, 1323, 993),
             _ => (594, 933, 593, 993)
         };
+    }
+
+    private bool IsPixelColorSafe(int x, int y)
+    {
+        try
+        {
+            _ = _screenCapture.GetPixelColor(x, y);
+            return true; // Successfully captured pixel, window exists
+        }
+        catch
+        {
+            return false; // Failed to capture, window may not exist yet
+        }
     }
 
     private bool IsPixelColor(int x, int y, uint expectedColor, int tolerance = 30)
