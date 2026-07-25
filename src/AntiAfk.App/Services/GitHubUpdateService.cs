@@ -8,7 +8,8 @@ namespace AntiAfk.App.Services;
 
 public sealed class GitHubUpdateService : IUpdateService
 {
-    private readonly HttpClient _http = CreateHttpClient();
+    private static readonly HttpClient HttpClient = CreateHttpClient();
+
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
@@ -60,8 +61,13 @@ public sealed class GitHubUpdateService : IUpdateService
         }
 
         var currentExePath = Environment.ProcessPath;
-        var tempDir = _downloadedTempDir;
-        var newExePath = _downloadedExePath;
+        string? tempDir;
+        string? newExePath;
+        lock (_sync)
+        {
+            tempDir = _downloadedTempDir;
+            newExePath = _downloadedExePath;
+        }
 
         _logger.Info($"Applying update, swapping into: {currentExePath}");
 
@@ -133,7 +139,7 @@ public sealed class GitHubUpdateService : IUpdateService
         {
             var settings = _configService.Current.Update;
             var url = $"https://api.github.com/repos/{settings.GitHubOwner}/{settings.GitHubRepo}/releases/latest";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await HttpClient.GetAsync(url, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warning($"Update check failed: HTTP {(int)response.StatusCode}");
@@ -175,7 +181,11 @@ public sealed class GitHubUpdateService : IUpdateService
             SetAvailability(UpdateAvailability.Downloading);
 
             var tempDir = Path.Combine(Path.GetTempPath(), $"antiafk-update-{Guid.NewGuid():N}");
-            try
+            Directory.CreateDirectory(tempDir);
+            var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
+
+            await using (var fileStream = File.Create(exePath))
+            await using (var downloadStream = await HttpClient.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
             {
                 Directory.CreateDirectory(tempDir);
                 var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
@@ -204,20 +214,15 @@ public sealed class GitHubUpdateService : IUpdateService
                 _logger.Error($"Failed to download update {remoteVersion}.", ex);
                 SetAvailability(UpdateAvailability.None);
             }
-            finally
+
+            lock (_sync)
             {
-                try
-                {
-                    if (Directory.Exists(tempDir) && _downloadedTempDir != tempDir)
-                    {
-                        Directory.Delete(tempDir, true);
-                    }
-                }
-                catch
-                {
-                    // Ignore cleanup errors
-                }
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
             }
+
+            SetAvailability(UpdateAvailability.Ready);
+            _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
         }
         catch (OperationCanceledException)
         {
@@ -261,6 +266,5 @@ public sealed class GitHubUpdateService : IUpdateService
     public void Dispose()
     {
         _timer?.Dispose();
-        _http.Dispose();
     }
 }
