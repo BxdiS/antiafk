@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
@@ -8,7 +9,8 @@ namespace AntiAfk.App.Services;
 
 public sealed class GitHubUpdateService : IUpdateService
 {
-    private readonly HttpClient _http = CreateHttpClient();
+    private static readonly HttpClient HttpClient = CreateHttpClient();
+
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
@@ -60,8 +62,13 @@ public sealed class GitHubUpdateService : IUpdateService
         }
 
         var currentExePath = Environment.ProcessPath;
-        var tempDir = _downloadedTempDir;
-        var newExePath = _downloadedExePath;
+        string? tempDir;
+        string? newExePath;
+        lock (_sync)
+        {
+            tempDir = _downloadedTempDir;
+            newExePath = _downloadedExePath;
+        }
 
         _logger.Info($"Applying update, swapping into: {currentExePath}");
 
@@ -133,7 +140,7 @@ public sealed class GitHubUpdateService : IUpdateService
         {
             var settings = _configService.Current.Update;
             var url = $"https://api.github.com/repos/{settings.GitHubOwner}/{settings.GitHubRepo}/releases/latest";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await HttpClient.GetAsync(url, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warning($"Update check failed: HTTP {(int)response.StatusCode}");
@@ -175,28 +182,58 @@ public sealed class GitHubUpdateService : IUpdateService
             SetAvailability(UpdateAvailability.Downloading);
 
             var tempDir = Path.Combine(Path.GetTempPath(), $"antiafk-update-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(tempDir);
-            var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
-
-            await using (var fileStream = File.Create(exePath))
-            await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+            try
             {
-                await downloadStream.CopyToAsync(fileStream, cancellationToken);
+                Directory.CreateDirectory(tempDir);
+                var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
+
+                await using (var fileStream = File.Create(exePath))
+                await using (var downloadStream = await HttpClient.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+                {
+                    await downloadStream.CopyToAsync(fileStream, cancellationToken);
+                }
+
+                if (new FileInfo(exePath).Length == 0)
+                {
+                    _logger.Error("Downloaded update file is empty.");
+                    SetAvailability(UpdateAvailability.None);
+                    return;
+                }
+
+                if (!await VerifyDownloadedFileAsync(exePath, asset.BrowserDownloadUrl, cancellationToken))
+                {
+                    _logger.Warning("Downloaded file verification failed.");
+                    return;
+                }
+
+                lock (_sync)
+                {
+                    _downloadedExePath = exePath;
+                    _downloadedTempDir = tempDir;
+                }
+
+                SetAvailability(UpdateAvailability.Ready);
+                _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
             }
-
-            if (new FileInfo(exePath).Length == 0)
+            catch (Exception ex)
             {
-                _logger.Error("Downloaded update file is empty.");
-                Directory.Delete(tempDir, true);
+                _logger.Error($"Failed to download update {remoteVersion}.", ex);
                 SetAvailability(UpdateAvailability.None);
-                return;
             }
-
-            _downloadedExePath = exePath;
-            _downloadedTempDir = tempDir;
-
-            SetAvailability(UpdateAvailability.Ready);
-            _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir) && _downloadedTempDir != tempDir)
+                    {
+                        Directory.Delete(tempDir, true);
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -226,6 +263,42 @@ public sealed class GitHubUpdateService : IUpdateService
         return client;
     }
 
+    private async Task<bool> VerifyDownloadedFileAsync(string exePath, string downloadUrl, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sha256Path = downloadUrl + ".sha256";
+            using var checksumResponse = await HttpClient.GetAsync(sha256Path, cancellationToken);
+            if (!checksumResponse.IsSuccessStatusCode)
+            {
+                _logger.Warning("Could not download checksum file for verification.");
+                return true;
+            }
+
+            var checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
+            var expectedHash = checksumText.Split(' ')[0].ToLower();
+
+            using var sha256 = SHA256.Create();
+            await using var stream = File.OpenRead(exePath);
+            var hash = await sha256.ComputeHashAsync(stream, cancellationToken);
+            var actualHash = BitConverter.ToString(hash).Replace("-", "").ToLower();
+
+            if (expectedHash != actualHash)
+            {
+                _logger.Error($"Checksum mismatch: expected {expectedHash}, got {actualHash}");
+                return false;
+            }
+
+            _logger.Info("Download verification passed.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Download verification error.", ex);
+            return true;
+        }
+    }
+
     private void SetAvailability(UpdateAvailability availability)
     {
         if (Availability == availability)
@@ -240,6 +313,5 @@ public sealed class GitHubUpdateService : IUpdateService
     public void Dispose()
     {
         _timer?.Dispose();
-        _http.Dispose();
     }
 }
