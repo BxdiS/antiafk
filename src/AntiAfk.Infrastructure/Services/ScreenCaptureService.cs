@@ -1,5 +1,6 @@
 using AntiAfk.Core.Abstractions;
 using System.Drawing;
+using System.Windows.Forms;
 
 namespace AntiAfk.Infrastructure.Services;
 
@@ -7,18 +8,11 @@ public sealed class ScreenCaptureService : IScreenCaptureService
 {
     public (byte R, byte G, byte B) GetPixelColor(int screenX, int screenY)
     {
-        // Validate coordinates are within screen bounds
-        var totalWidth = 0;
-        var totalHeight = 0;
-        foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+        if (!IsOnAnyScreen(screenX, screenY))
         {
-            totalWidth = Math.Max(totalWidth, screen.Bounds.Right);
-            totalHeight = Math.Max(totalHeight, screen.Bounds.Bottom);
-        }
-
-        if (screenX < 0 || screenY < 0 || screenX >= totalWidth || screenY >= totalHeight)
-        {
-            throw new ArgumentOutOfRangeException($"Coordinates ({screenX}, {screenY}) are outside screen bounds (0,0) to ({totalWidth},{totalHeight})");
+            throw new ArgumentOutOfRangeException(
+                nameof(screenX),
+                $"Point ({screenX}, {screenY}) is not on any monitor. Monitors: {DescribeScreens()}");
         }
 
         try
@@ -37,27 +31,24 @@ public sealed class ScreenCaptureService : IScreenCaptureService
 
     public bool RegionContainsColor(int x1, int y1, int x2, int y2, Func<byte, byte, byte, bool> predicate)
     {
-        var totalWidth = 0;
-        var totalHeight = 0;
-        foreach (var screen in System.Windows.Forms.Screen.AllScreens)
-        {
-            totalWidth = Math.Max(totalWidth, screen.Bounds.Right);
-            totalHeight = Math.Max(totalHeight, screen.Bounds.Bottom);
-        }
-
-        if (x1 < 0 || y1 < 0 || x2 > totalWidth || y2 > totalHeight)
-        {
-            throw new ArgumentOutOfRangeException($"Region ({x1},{y1})-({x2},{y2}) is outside screen bounds (0,0) to ({totalWidth},{totalHeight})");
-        }
-
         var width = Math.Max(1, x2 - x1);
         var height = Math.Max(1, y2 - y1);
+        var region = new Rectangle(x1, y1, width, height);
+
+        // The region has to sit inside a single monitor: spanning two monitors, or covering a gap
+        // in a non-rectangular desktop, would silently capture black pixels for the uncovered part.
+        if (!IsWithinSingleScreen(region))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(x1),
+                $"Region ({x1},{y1})-({x2},{y2}) is not fully contained in a single monitor. Monitors: {DescribeScreens()}");
+        }
 
         try
         {
-            using var bitmap = new System.Drawing.Bitmap(width, height);
-            using var graphics = System.Drawing.Graphics.FromImage(bitmap);
-            graphics.CopyFromScreen(x1, y1, 0, 0, new System.Drawing.Size(width, height));
+            using var bitmap = new Bitmap(width, height);
+            using var graphics = Graphics.FromImage(bitmap);
+            graphics.CopyFromScreen(x1, y1, 0, 0, new Size(width, height));
 
             for (var x = 0; x < width; x++)
             {
@@ -78,4 +69,37 @@ public sealed class ScreenCaptureService : IScreenCaptureService
             throw new InvalidOperationException($"Failed to capture region ({x1},{y1})-({x2},{y2}): {ex.Message}", ex);
         }
     }
+
+    // The virtual desktop is a union of monitor rectangles, not a single rectangle anchored at
+    // (0,0): monitors can sit at negative offsets, and the union can leave uncovered gaps. Testing
+    // against actual monitor bounds is the only way to tell a real coordinate from one that would
+    // capture nothing.
+    private static bool IsOnAnyScreen(int x, int y)
+    {
+        foreach (var screen in Screen.AllScreens)
+        {
+            if (screen.Bounds.Contains(x, y))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsWithinSingleScreen(Rectangle region)
+    {
+        foreach (var screen in Screen.AllScreens)
+        {
+            if (screen.Bounds.Contains(region))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string DescribeScreens() =>
+        string.Join("; ", Screen.AllScreens.Select(s => s.Bounds.ToString()));
 }

@@ -50,8 +50,30 @@ jobs:
       - name: Generate app icon
         run: dotnet run --project tools/GenerateAppIcon/GenerateAppIcon.csproj -- src/AntiAfk.App/Assets/app.ico
 
-      - name: Publish Native AOT single-file exe
+      - name: Publish self-contained single-file exe
         run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 -o publish
+
+      - name: Verify release artifact is self-contained
+        shell: pwsh
+        run: |
+          # The release ships AntiAFK.exe on its own and the updater swaps that single file over a
+          # running install. If publish ever emits loose runtime files again, the uploaded exe would
+          # not run - fail the build here instead of shipping a broken release.
+          $files = Get-ChildItem publish -File
+          $exe = $files | Where-Object Name -eq 'AntiAFK.exe'
+          if (-not $exe) { throw "AntiAFK.exe missing from publish output" }
+
+          $stray = $files | Where-Object { $_.Name -ne 'AntiAFK.exe' }
+          if ($stray) {
+            $list = ($stray | ForEach-Object Name) -join ', '
+            throw "Publish emitted $($stray.Count) extra file(s) beside AntiAFK.exe: $list"
+          }
+
+          if ($exe.Length -lt 20MB) {
+            throw "AntiAFK.exe is only $([math]::Round($exe.Length/1MB,1)) MB - runtime is not bundled"
+          }
+
+          Write-Host "OK: single self-contained artifact, $([math]::Round($exe.Length/1MB,1)) MB"
 
       - name: Compute checksum
         shell: pwsh
