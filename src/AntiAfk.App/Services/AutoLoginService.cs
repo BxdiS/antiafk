@@ -148,13 +148,13 @@ public sealed class AutoLoginService : IAutoLoginService
 
         var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character);
 
-        _logger.Info($"Selecting character {character}: click ({selectX},{selectY}) then confirm ({confirmX},{confirmY})");
-
+        _logger.Info($"Selecting character {character}: click ({selectX},{selectY})");
         _inputService.ClickScreen(selectX, selectY);
-        await Task.Delay(800, cancellationToken);
+        await Task.Delay(1500, cancellationToken); // Wait for UI to respond to selection
 
+        _logger.Info($"Confirming character {character}: click ({confirmX},{confirmY})");
         _inputService.ClickScreen(confirmX, confirmY);
-        await Task.Delay(2000, cancellationToken);
+        await Task.Delay(3500, cancellationToken); // Wait for character load and transition
     }
 
     private async Task SelectSpawnAsync(int spawnSlot, CancellationToken cancellationToken)
@@ -162,7 +162,7 @@ public sealed class AutoLoginService : IAutoLoginService
         var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
         _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
         _inputService.ClickScreen(spawnX, spawnY);
-        await Task.Delay(1000, cancellationToken);
+        await Task.Delay(2500, cancellationToken); // Wait for spawn confirmation to process
     }
 
     private async Task WaitForGameLoadAsync(CancellationToken cancellationToken)
