@@ -86,7 +86,7 @@ public sealed class AutoLoginService : IAutoLoginService
 
         _logger.Info($"Auto-login: clicking launcher login button at ({LoginButtonX}, {LoginButtonY})");
         _inputService.ClickScreen(LoginButtonX, LoginButtonY);
-        await Task.Delay(2000, cancellationToken);
+        await Task.Delay(4000, cancellationToken); // Wait for game process to launch (4s)
     }
 
     private async Task WaitForGTA5Async(CancellationToken cancellationToken)
@@ -121,8 +121,8 @@ public sealed class AutoLoginService : IAutoLoginService
             if (IsPixelColor(ServerPixelX, ServerPixelY, ServerPixelColor, tolerance: 40))
             {
                 _logger.Info("Server connection / character-select screen detected");
-                // Let the UI stabilise before we start clicking
-                await Task.Delay(2000, cancellationToken);
+                // Let the UI stabilise before we start clicking (3s for slow connections)
+                await Task.Delay(3000, cancellationToken);
                 return true;
             }
 
@@ -150,11 +150,11 @@ public sealed class AutoLoginService : IAutoLoginService
 
         _logger.Info($"Selecting character {character}: click ({selectX},{selectY})");
         _inputService.ClickScreen(selectX, selectY);
-        await Task.Delay(1500, cancellationToken); // Wait for UI to respond to selection
+        await Task.Delay(4000, cancellationToken); // Wait for UI to respond to selection (4s for stability)
 
         _logger.Info($"Confirming character {character}: click ({confirmX},{confirmY})");
         _inputService.ClickScreen(confirmX, confirmY);
-        await Task.Delay(3500, cancellationToken); // Wait for character load and transition
+        await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
     }
 
     private async Task SelectSpawnAsync(int spawnSlot, CancellationToken cancellationToken)
@@ -162,7 +162,7 @@ public sealed class AutoLoginService : IAutoLoginService
         var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
         _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
         _inputService.ClickScreen(spawnX, spawnY);
-        await Task.Delay(2500, cancellationToken); // Wait for spawn confirmation to process
+        await Task.Delay(4000, cancellationToken); // Wait for spawn confirmation to process (4s for stability)
     }
 
     private async Task WaitForGameLoadAsync(CancellationToken cancellationToken)
