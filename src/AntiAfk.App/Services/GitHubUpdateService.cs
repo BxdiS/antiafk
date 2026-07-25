@@ -187,15 +187,32 @@ public sealed class GitHubUpdateService : IUpdateService
             await using (var fileStream = File.Create(exePath))
             await using (var downloadStream = await HttpClient.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
             {
-                await downloadStream.CopyToAsync(fileStream, cancellationToken);
-            }
+                Directory.CreateDirectory(tempDir);
+                var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
 
-            if (new FileInfo(exePath).Length == 0)
+                await using (var fileStream = File.Create(exePath))
+                await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+                {
+                    await downloadStream.CopyToAsync(fileStream, cancellationToken);
+                }
+
+                if (new FileInfo(exePath).Length == 0)
+                {
+                    _logger.Error("Downloaded update file is empty.");
+                    SetAvailability(UpdateAvailability.None);
+                    return;
+                }
+
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
+
+                SetAvailability(UpdateAvailability.Ready);
+                _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
+            }
+            catch (Exception ex)
             {
-                _logger.Error("Downloaded update file is empty.");
-                Directory.Delete(tempDir, true);
+                _logger.Error($"Failed to download update {remoteVersion}.", ex);
                 SetAvailability(UpdateAvailability.None);
-                return;
             }
 
             lock (_sync)
