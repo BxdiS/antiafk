@@ -51,7 +51,8 @@ public sealed class SettingsForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList
         };
         _languageCombo.Items.AddRange([.. localization.SupportedLanguages]);
-        _languageCombo.SelectedItem = _workingCopy.Language;
+        var languageIndex = _languageCombo.Items.IndexOf(_workingCopy.Language);
+        _languageCombo.SelectedIndex = languageIndex >= 0 ? languageIndex : 0;
 
         _launcherPathLabel = new Label { AutoSize = true, Location = new Point(16, 76) };
         _launcherPathText = new TextBox { Location = new Point(16, 96), Width = 420 };
