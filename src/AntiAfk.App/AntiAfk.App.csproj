@@ -20,13 +20,13 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <StripSymbols>true</StripSymbols>
-    <!-- WinForms is not officially AOT-supported, but this app's UI surface (NotifyIcon, plain Form/RichTextBox/ComboBox)
-         avoids the trim-unsafe paths (no designer resx, no data binding, no BinaryFormatter). Verified against a real
-         MSVC-linked build in CI before relying on this. -->
-    <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
+    <!-- PublishAot is intentionally NOT used: RichTextBox registers an IRichEditOleCallback via
+         COM on handle creation (RichTextBox.OnHandleCreated -> UpdateOleCallback), and the
+         source-generated COM interop path required by Native AOT throws
+         "System.InvalidCastException: Specified cast is not valid." there. This is a known
+         WinForms/NativeAOT incompatibility, not something fixable from app code. -->
   </PropertyGroup>
 
   <ItemGroup>

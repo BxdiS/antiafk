@@ -69,7 +69,9 @@ public sealed class WindowService : IWindowService
                 return true;
             }
 
-            if (!NativeMethods.GetWindowRect(hWnd, out var rect))
+            RestoreIfMinimized(hWnd);
+
+            if (!NativeMethods.GetWindowRect(hWnd, out var rect) || !IsRectSane(rect))
             {
                 return true;
             }
@@ -117,7 +119,9 @@ public sealed class WindowService : IWindowService
                 return true;
             }
 
-            if (!NativeMethods.GetWindowRect(hWnd, out var rect))
+            RestoreIfMinimized(hWnd);
+
+            if (!NativeMethods.GetWindowRect(hWnd, out var rect) || !IsRectSane(rect))
             {
                 return true;
             }
@@ -146,6 +150,39 @@ public sealed class WindowService : IWindowService
 
     private static GameWindowInfo CreateWindowInfo(IntPtr handle, string title, NativeMethods.Rect rect) =>
         new(handle, title, rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+
+    // Minimized windows report a sentinel rect (roughly -32000,-32000 with a tiny size) from
+    // GetWindowRect. Restoring before reading the rect avoids feeding that garbage into scaling.
+    private static void RestoreIfMinimized(IntPtr hWnd)
+    {
+        if (!NativeMethods.IsIconic(hWnd))
+        {
+            return;
+        }
+
+        NativeMethods.ShowWindow(hWnd, NativeMethods.SwRestore);
+
+        for (var i = 0; i < 10 && NativeMethods.IsIconic(hWnd); i++)
+        {
+            Thread.Sleep(50);
+        }
+    }
+
+    // Defensive sanity check: reject rects that are clearly bogus (minimized-window sentinel,
+    // or any other invalid state) instead of trusting them for coordinate scaling.
+    private static bool IsRectSane(NativeMethods.Rect rect)
+    {
+        const int minReasonableCoordinate = -10000;
+        const int maxReasonableCoordinate = 20000;
+
+        if (rect.Left < minReasonableCoordinate || rect.Top < minReasonableCoordinate ||
+            rect.Right > maxReasonableCoordinate || rect.Bottom > maxReasonableCoordinate)
+        {
+            return false;
+        }
+
+        return rect.Right - rect.Left > 0 && rect.Bottom - rect.Top > 0;
+    }
 
     public bool IsWindowValid(IntPtr handle) => handle != IntPtr.Zero && NativeMethods.IsWindow(handle);
 

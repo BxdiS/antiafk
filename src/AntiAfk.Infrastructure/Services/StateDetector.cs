@@ -30,12 +30,22 @@ public sealed class StateDetector : IStateDetector
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
-        var found = _screenCapture.RegionContainsColor(
-            coords.WarnBoxX1,
-            coords.WarnBoxY1,
-            coords.WarnBoxX2,
-            coords.WarnBoxY2,
-            static (r, g, b) => r > 180 && g < 100 && b < 100);
+
+        bool found;
+        try
+        {
+            found = _screenCapture.RegionContainsColor(
+                coords.WarnBoxX1,
+                coords.WarnBoxY1,
+                coords.WarnBoxX2,
+                coords.WarnBoxY2,
+                static (r, g, b) => r > 180 && g < 100 && b < 100);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"CheckAndCloseWarning: failed to read screen region ({ex.Message}). Skipping.");
+            return false;
+        }
 
         if (!found)
         {
@@ -52,7 +62,18 @@ public sealed class StateDetector : IStateDetector
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
-        var (r, g, b) = _screenCapture.GetPixelColor(coords.MapPixelX, coords.MapPixelY);
+
+        byte r, g, b;
+        try
+        {
+            (r, g, b) = _screenCapture.GetPixelColor(coords.MapPixelX, coords.MapPixelY);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"CheckAndCloseMap: failed to read pixel ({ex.Message}). Skipping.");
+            return false;
+        }
+
         if (r > 200 && g < 40 && b is >= 80 and <= 140)
         {
             _logger.Warning("Map menu detected. Closing with ESC...");
@@ -72,8 +93,23 @@ public sealed class StateDetector : IStateDetector
 
         _logger.Info("Analyzing UI state...");
 
-        var (rHud, gHud, bHud) = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
-        var (rMp, gMp, bMp) = _screenCapture.GetPixelColor(coords.MpPixelX, coords.MpPixelY);
+        (byte r, byte g, byte b) hud;
+        (byte r, byte g, byte b) mp;
+        try
+        {
+            hud = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
+            mp = _screenCapture.GetPixelColor(coords.MpPixelX, coords.MpPixelY);
+        }
+        catch (Exception ex)
+        {
+            // Coordinates can be transiently invalid right after the game window
+            // moves/resizes/minimizes. Skip this recovery pass instead of crashing the engine.
+            _logger.Warning($"SmartStateRecovery: failed to read screen state ({ex.Message}). Skipping this pass.");
+            return;
+        }
+
+        var (rHud, gHud, bHud) = hud;
+        var (rMp, gMp, bMp) = mp;
 
         if (rMp is >= 15 and <= 50 && gMp is >= 45 and <= 90 && bMp is >= 85 and <= 130)
         {
