@@ -41,7 +41,10 @@ public sealed class InputService : IInputService
     public void SendKeyToGame(IntPtr gameHandle, ushort virtualKey, double durationSeconds)
     {
         _windowService.ForceForeground(gameHandle);
-        Thread.Sleep(150);
+        // 300 ms after focus change: on lower-end machines the game window needs longer to
+        // regain input focus than the previous 150 ms allowed, so the first click/keystroke
+        // sometimes landed on the previously focused window instead.
+        Thread.Sleep(300);
         SendKey(virtualKey, durationSeconds);
     }
 
@@ -64,7 +67,10 @@ public sealed class InputService : IInputService
             var currentX = (int)(startX + (clientX - startX) * t);
             var currentY = (int)(startY + (clientY - startY) * t);
             SendMouseMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, NativeMethods.MakeLParam(currentX, currentY));
-            Thread.Sleep(10);
+            // 25 ms per step (was 10). At 15-25 steps the trajectory now takes ~400-600 ms
+            // instead of ~150-250 ms, which reads as a natural mouse glide rather than a
+            // teleport.
+            Thread.Sleep(25);
         }
 
         var finalX = clientX + _random.Next(-4, 5);
@@ -72,10 +78,16 @@ public sealed class InputService : IInputService
         var lParam = NativeMethods.MakeLParam(finalX, finalY);
 
         SendMouseMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, lParam);
-        Thread.Sleep(50);
+        // 200 ms (was 50) between "cursor arrived" and mouse-down. 50 ms was short enough that
+        // the click sometimes registered before the target element noticed the hover, which is
+        // when the click landed on a neighbouring button.
+        Thread.Sleep(200);
         SendMouseMessage(windowHandle, NativeMethods.WmLbuttondown, (IntPtr)NativeMethods.MkLbutton, lParam);
         Thread.Sleep(TimeSpan.FromMilliseconds(_random.Next(70, 151)));
         SendMouseMessage(windowHandle, NativeMethods.WmLbuttonup, IntPtr.Zero, lParam);
+        // 200 ms after the up-event so the next MoveAndClickBackground call cannot start
+        // repositioning the cursor before the click has been fully processed.
+        Thread.Sleep(200);
     }
 
     public void ClickScreen(int screenX, int screenY)
@@ -111,7 +123,10 @@ public sealed class InputService : IInputService
     public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY)
     {
         _windowService.ForceForeground(gameHandle);
-        Thread.Sleep(150);
+        // 300 ms after focus change: on lower-end machines the game window needs longer to
+        // regain input focus than the previous 150 ms allowed, so the first click/keystroke
+        // sometimes landed on the previously focused window instead.
+        Thread.Sleep(300);
         ClickScreen(screenX, screenY);
     }
 
