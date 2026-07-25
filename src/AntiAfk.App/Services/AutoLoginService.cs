@@ -46,10 +46,19 @@ public sealed class AutoLoginService : IAutoLoginService
 
             // Step 0: Check if we're already on the character-select screen. This covers the
             // case where the script is started mid-flow (e.g. the user already logged in via
-            // the launcher manually) - in that case, skip the launcher click and GTA5 wait.
-            if (IsPixelColor(CharacterSelectPixelX, CharacterSelectPixelY, CharacterSelectPixelColor, GameConstants.CharSelectTolerance))
+            // the launcher manually).
+            var alreadyAtCharacterSelect = IsPixelColor(
+                CharacterSelectPixelX, CharacterSelectPixelY, CharacterSelectPixelColor, GameConstants.CharSelectTolerance);
+
+            if (alreadyAtCharacterSelect)
             {
-                _logger.Info("Character-select screen already detected - skipping launcher login and GTA5 wait");
+                // Steps 1-3 are all about getting *to* this screen, so skip them entirely.
+                // Waiting for the server-connection indicator here would poll for a pixel that
+                // belongs to the screen shown before character select, which never comes back.
+                _logger.Info("Character-select screen already detected - skipping launcher login, GTA5 wait and server-connection wait");
+
+                // Let the UI settle before clicking, same as the normal path does.
+                await Task.Delay(3000, cancellationToken);
             }
             else
             {
@@ -58,14 +67,14 @@ public sealed class AutoLoginService : IAutoLoginService
 
                 // Step 2: Wait for GTA5.exe process to start
                 await WaitForGTA5Async(cancellationToken);
-            }
 
-            // Step 3: Wait until the server-connected / character-select screen appears
-            var reached = await WaitForServerConnectionAsync(cancellationToken);
-            if (!reached)
-            {
-                _logger.Warning("Auto-login: character-select screen not detected; skipping automated selection");
-                return;
+                // Step 3: Wait until the server-connected / character-select screen appears
+                var reached = await WaitForServerConnectionAsync(cancellationToken);
+                if (!reached)
+                {
+                    _logger.Warning("Auto-login: character-select screen not detected; skipping automated selection");
+                    return;
+                }
             }
 
             // Step 4: Character selection (1 of 3)
@@ -112,14 +121,19 @@ public sealed class AutoLoginService : IAutoLoginService
     private async Task WaitForGTA5Async(CancellationToken cancellationToken)
     {
         // Wait for GTA5.exe process (up to 5 minutes)
+        const int maxAttempts = 300;
         var attempts = 0;
-        while (Process.GetProcessesByName("GTA5").Length == 0 && attempts < 300)
+
+        _logger.Info("Auto-login: waiting for GTA5.exe to start...");
+
+        while (Process.GetProcessesByName("GTA5").Length == 0 && attempts < maxAttempts)
         {
             await Task.Delay(1000, cancellationToken);
             attempts++;
+            LogWaitProgress("GTA5.exe", attempts, maxAttempts);
         }
 
-        if (attempts >= 300)
+        if (attempts >= maxAttempts)
         {
             _logger.Warning("GTA5.exe did not start within timeout (5 minutes)");
         }
@@ -136,6 +150,8 @@ public sealed class AutoLoginService : IAutoLoginService
         var attempts = 0;
         const int maxAttempts = 300; // up to 5 minutes
 
+        _logger.Info($"Auto-login: waiting for server connection (pixel {ServerPixelX},{ServerPixelY})...");
+
         while (attempts < maxAttempts)
         {
             if (IsPixelColor(ServerPixelX, ServerPixelY, ServerPixelColor, tolerance: 40))
@@ -148,10 +164,21 @@ public sealed class AutoLoginService : IAutoLoginService
 
             await Task.Delay(1000, cancellationToken);
             attempts++;
+            LogWaitProgress("server connection", attempts, maxAttempts);
         }
 
         _logger.Warning("Server connection indicator not detected within timeout (5 minutes)");
         return false;
+    }
+
+    // Long polling loops are otherwise completely silent, which is indistinguishable from a hang.
+    private void LogWaitProgress(string what, int attempts, int maxAttempts)
+    {
+        const int logEverySeconds = 15;
+        if (attempts % logEverySeconds == 0 && attempts < maxAttempts)
+        {
+            _logger.Info($"Auto-login: still waiting for {what}... ({attempts}s / {maxAttempts}s)");
+        }
     }
 
     private async Task SelectCharacterAsync(int characterSlot, CancellationToken cancellationToken)
@@ -192,6 +219,8 @@ public sealed class AutoLoginService : IAutoLoginService
         var attempts = 0;
         const int maxAttempts = 300; // up to 5 minutes
 
+        _logger.Info("Auto-login: waiting for in-game HUD...");
+
         while (!loaded && attempts < maxAttempts)
         {
             if (IsPixelColor(1888, 25, 0xff007f, tolerance: 40))
@@ -201,6 +230,7 @@ public sealed class AutoLoginService : IAutoLoginService
             }
 
             await Task.Delay(1000, cancellationToken);
+            LogWaitProgress("in-game HUD", attempts + 1, maxAttempts);
             attempts++;
         }
 
