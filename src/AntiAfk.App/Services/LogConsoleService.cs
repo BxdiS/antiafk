@@ -1,26 +1,28 @@
+using AntiAfk.Core.Abstractions;
+
 namespace AntiAfk.App.Services;
 
 public sealed class LogConsoleService
 {
-    private Logging.LogConsoleWindow? _window;
+    private Logging.LogConsoleForm? _window;
 
-    public bool IsOpen => _window is { IsLoaded: true };
+    public bool IsOpen => _window is { IsDisposed: false };
 
-    public void Show(string logFilePath)
+    public void Show(IAppLogger logger)
     {
-        if (_window is { IsLoaded: true })
+        if (_window is { IsDisposed: false })
         {
             _window.Activate();
-            if (_window.WindowState == System.Windows.WindowState.Minimized)
+            if (_window.WindowState == FormWindowState.Minimized)
             {
-                _window.WindowState = System.Windows.WindowState.Normal;
+                _window.WindowState = FormWindowState.Normal;
             }
 
             return;
         }
 
-        _window = new Logging.LogConsoleWindow(logFilePath);
-        _window.Closed += (_, _) => _window = null;
+        _window = new Logging.LogConsoleForm(logger);
+        _window.FormClosed += (_, _) => _window = null;
         _window.Show();
     }
 

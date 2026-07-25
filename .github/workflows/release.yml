@@ -9,8 +9,6 @@ permissions:
   contents: write
 
 env:
-  VPK_VERSION: '1.2.0'
-  PACK_ID: antiafk
   PROJECT_PATH: src/AntiAfk.App/AntiAfk.App.csproj
 
 jobs:
@@ -52,29 +50,17 @@ jobs:
       - name: Generate app icon
         run: dotnet run --project tools/GenerateAppIcon/GenerateAppIcon.csproj -- src/AntiAfk.App/Assets/app.ico
 
-      - name: Publish application
-        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -o publish -r win-x64 --self-contained true
+      - name: Publish Native AOT single-file exe
+        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 -o publish
 
-      - name: Install Velopack CLI
-        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
-
-      - name: Download previous release
-        continue-on-error: true
-        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pack release
-        run: vpk pack -u ${{ env.PACK_ID }} -v ${{ steps.version.outputs.version }} -p publish --mainExe AntiAFK.exe --packTitle AntiAFK --packAuthors BxdiS --icon src/AntiAfk.App/Assets/app.ico --noPortable --shortcuts Desktop,StartMenuRoot
-
-      - name: Upload draft release
+      - name: Compute checksum
         shell: pwsh
         run: |
-          vpk upload github `
-            --repoUrl "https://github.com/${{ github.repository }}" `
-            --token "${{ secrets.GITHUB_TOKEN }}" `
-            --tag "${{ github.ref_name }}" `
-            --releaseName "AntiAFK v${{ steps.version.outputs.version }}"
+          $hash = Get-FileHash -Path "publish/AntiAFK.exe" -Algorithm SHA256
+          "$($hash.Hash.ToLower())  AntiAFK.exe" | Set-Content -Path "publish/AntiAFK.exe.sha256" -NoNewline
 
       - name: Generate release notes
+        id: notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -83,15 +69,26 @@ jobs:
             -f tag_name="${{ github.ref_name }}" \
             -f target_commitish=main \
             --jq .body)
-          gh release edit "${{ github.ref_name }}" --notes "$NOTES"
+          echo "$NOTES" > release_notes.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "publish/AntiAFK.exe" \
+            "publish/AntiAFK.exe.sha256" \
+            --title "AntiAFK v${{ steps.version.outputs.version }}" \
+            --notes-file release_notes.md
 
       - name: Release summary
         shell: bash
         run: |
-          echo "### Draft release created" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Release published" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Status: **draft** (edit notes and publish manually)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Asset: \`AntiAFK.exe\` (portable, no installer)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "[Open release on GitHub](https://github.com/${{ github.repository }}/releases)" >> "$GITHUB_STEP_SUMMARY"

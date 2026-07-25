@@ -5,17 +5,18 @@ namespace AntiAfk.App.Tray;
 
 public static class TrayIconFactory
 {
-    public static Icon CreateRunningIcon() =>
-        CreateStatusIcon(Color.FromArgb(34, 197, 94));
+    private static readonly Icon RunningIcon = CreateStatusIcon(Color.FromArgb(34, 197, 94));
+    private static readonly Icon StoppedIcon = CreateStatusIcon(Color.FromArgb(239, 68, 68));
+    private static readonly Icon WaitingIcon = CreateStatusIcon(Color.FromArgb(250, 204, 21));
+    private static readonly Icon UpdateIcon = CreateStatusIcon(Color.FromArgb(59, 130, 246));
 
-    public static Icon CreateStoppedIcon() =>
-        CreateStatusIcon(Color.FromArgb(239, 68, 68));
+    public static Icon CreateRunningIcon() => RunningIcon;
 
-    public static Icon CreateWaitingIcon() =>
-        CreateStatusIcon(Color.FromArgb(250, 204, 21));
+    public static Icon CreateStoppedIcon() => StoppedIcon;
 
-    public static Icon CreateUpdateIcon() =>
-        CreateStatusIcon(Color.FromArgb(59, 130, 246));
+    public static Icon CreateWaitingIcon() => WaitingIcon;
+
+    public static Icon CreateUpdateIcon() => UpdateIcon;
 
     private static Icon CreateStatusIcon(Color color)
     {
@@ -30,6 +31,8 @@ public static class TrayIconFactory
         using var border = new Pen(Color.FromArgb(30, 30, 30), 2);
         graphics.DrawEllipse(border, 4, 4, 24, 24);
 
-        return Icon.FromHandle(bitmap.GetHicon());
+        var handle = bitmap.GetHicon();
+        var icon = Icon.FromHandle(handle);
+        return (Icon)icon.Clone();
     }
 }

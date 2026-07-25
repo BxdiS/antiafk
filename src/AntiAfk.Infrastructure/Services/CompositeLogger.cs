@@ -9,10 +9,16 @@ public sealed class CompositeLogger : IAppLogger, IDisposable
     public CompositeLogger(params IAppLogger[] loggers)
     {
         _loggers = loggers;
+        foreach (var logger in _loggers)
+        {
+            logger.LineLogged += line => LineLogged?.Invoke(line);
+        }
     }
 
-    public string LogFilePath => _loggers.FirstOrDefault(logger => !string.IsNullOrWhiteSpace(logger.LogFilePath))?.LogFilePath
-        ?? string.Empty;
+    public event Action<string>? LineLogged;
+
+    public IReadOnlyList<string> Buffer =>
+        _loggers.Length > 0 ? _loggers[0].Buffer : [];
 
     public void Info(string message)
     {

@@ -1,47 +1,15 @@
-using System.Text.Json;
-using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 
 namespace AntiAfk.Infrastructure.Services;
 
 public sealed class EngineProgressStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    private readonly string _filePath;
-
-    public EngineProgressStore(string? filePath = null)
-    {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppBranding.AppDataFolder);
-        Directory.CreateDirectory(directory);
-        _filePath = filePath ?? Path.Combine(directory, "engine_state.json");
-    }
+    private EngineProgress _current = new();
 
     public void Save(EngineProgress progress)
     {
-        var json = JsonSerializer.Serialize(progress, JsonOptions);
-        File.WriteAllText(_filePath, json);
+        _current = progress;
     }
 
-    public EngineProgress LoadOrDefault()
-    {
-        if (!File.Exists(_filePath))
-        {
-            return new EngineProgress();
-        }
-
-        try
-        {
-            var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<EngineProgress>(json, JsonOptions) ?? new EngineProgress();
-        }
-        catch
-        {
-            return new EngineProgress();
-        }
-    }
+    public EngineProgress LoadOrDefault() => _current;
 }

@@ -5,7 +5,6 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AntiAFK</AssemblyName>
     <RootNamespace>AntiAfk.App</RootNamespace>
@@ -21,19 +20,18 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StripSymbols>true</StripSymbols>
+    <!-- WinForms is not officially AOT-supported, but this app's UI surface (NotifyIcon, plain Form/RichTextBox/ComboBox)
+         avoids the trim-unsafe paths (no designer resx, no data binding, no BinaryFormatter). Verified against a real
+         MSVC-linked build in CI before relying on this. -->
+    <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AntiAfk.Core\AntiAfk.Core.csproj" />
     <ProjectReference Include="..\AntiAfk.Infrastructure\AntiAfk.Infrastructure.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Resource Include="Assets\app.ico" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

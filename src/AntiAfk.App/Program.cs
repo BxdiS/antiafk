@@ -5,7 +5,6 @@ using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Infrastructure.Localization;
 using AntiAfk.Infrastructure.Services;
-using Velopack;
 
 namespace AntiAfk.App;
 
@@ -15,10 +14,6 @@ internal static class Program
     private static void Main()
     {
         ShellIntegration.Register();
-
-        VelopackApp.Build()
-            .SetAutoApplyOnStartup(false)
-            .Run();
 
         using var mutex = new Mutex(true, AppBranding.MutexName, out var createdNew);
         if (!createdNew)
@@ -37,9 +32,9 @@ internal static class Program
 
     private static TrayApplicationContext CreateContext()
     {
-        var fileLogger = new FileLogger();
+        var memoryLogger = new MemoryLogger();
         var logConsole = new LogConsoleService();
-        var logger = fileLogger;
+        var logger = memoryLogger;
         var configService = new ConfigService();
         var localization = new LocalizationService();
         localization.SetLanguage(configService.Current.Language);
@@ -67,10 +62,10 @@ internal static class Program
             runtime);
 
         var engineHost = new EngineHostService(engine, progressStore, windowService, logger, localization);
-        var updateService = new UpdateHostService(configService, logger);
+        var updateService = new GitHubUpdateService(configService, logger);
         _ = updateService.InitializeAsync();
 
-        logger.Info($"{AppBranding.DisplayName} started. Log file: {fileLogger.LogFilePath}");
+        logger.Info($"{AppBranding.DisplayName} started.");
 
         return new TrayApplicationContext(engineHost, updateService, localization, configService, logger, logConsole);
     }
