@@ -17,44 +17,78 @@ public sealed class LogConsoleForm : Form
 
     public LogConsoleForm(IAppLogger logger)
     {
-        _logger = logger;
-
-        Text = "AntiAFK — Logs";
-        Width = 820;
-        Height = 520;
-        MinimumSize = new Size(480, 280);
-        StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(0x0D, 0x11, 0x17);
-
         try
         {
-            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        }
-        catch
-        {
-            // ignored - icon is cosmetic only
-        }
+            _logger = logger;
 
-        _logView = new RichTextBox
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(0x0D, 0x11, 0x17),
-            ForeColor = InfoColor,
-            Font = new Font("Consolas", 10f),
-            ReadOnly = true,
-            BorderStyle = BorderStyle.None,
-            WordWrap = false,
-            ScrollBars = RichTextBoxScrollBars.Both
-        };
-        Controls.Add(_logView);
+            Text = "AntiAFK — Logs";
+            Width = 820;
+            Height = 520;
+            MinimumSize = new Size(480, 280);
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Color.FromArgb(0x0D, 0x11, 0x17);
 
-        foreach (var line in _logger.Buffer)
-        {
-            AppendLine(line);
+            try
+            {
+                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            }
+            catch
+            {
+                // ignored - icon is cosmetic only
+            }
+
+            _logView = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(0x0D, 0x11, 0x17),
+                ForeColor = InfoColor,
+                Font = new Font("Consolas", 10f),
+                ReadOnly = true,
+                BorderStyle = BorderStyle.None,
+                WordWrap = false,
+                ScrollBars = RichTextBoxScrollBars.Both
+            };
+            Controls.Add(_logView);
+
+            try
+            {
+                // Load existing log buffer with error handling for large buffers
+                var buffer = _logger.Buffer;
+                if (buffer != null && buffer.Count > 0)
+                {
+                    foreach (var line in buffer)
+                    {
+                        try
+                        {
+                            AppendLineInternal(line);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error appending buffer line: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading log buffer: {ex.Message}");
+            }
+
+            _logger.LineLogged += OnLineLogged;
+            FormClosed += (_, _) =>
+            {
+                try
+                {
+                    _logger.LineLogged -= OnLineLogged;
+                }
+                catch { }
+            };
         }
-
-        _logger.LineLogged += OnLineLogged;
-        FormClosed += (_, _) => _logger.LineLogged -= OnLineLogged;
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LogConsoleForm constructor error: {ex.Message}");
+            throw;
+        }
     }
 
     private void OnLineLogged(string line)
@@ -84,26 +118,17 @@ public sealed class LogConsoleForm : Form
     {
         try
         {
-            if (_logView.IsDisposed || IsDisposed)
+            if (_logView?.IsDisposed == true || IsDisposed)
             {
                 return;
             }
 
-            if (!_logView.Created)
+            if (!_logView?.Created == true)
             {
                 return;
             }
 
-            _logView.SelectionStart = _logView.TextLength;
-            _logView.SelectionLength = 0;
-            _logView.SelectionColor = GetLineColor(line);
-            _logView.AppendText(line + Environment.NewLine);
-            _lineCount++;
-
-            TrimIfNeeded();
-
-            _logView.SelectionStart = _logView.TextLength;
-            _logView.ScrollToCaret();
+            AppendLineInternal(line);
         }
         catch (ObjectDisposedException)
         {
@@ -116,6 +141,26 @@ public sealed class LogConsoleForm : Form
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"LogConsoleForm.AppendLine error: {ex.Message}");
+        }
+    }
+
+    private void AppendLineInternal(string line)
+    {
+        if (_logView == null)
+            return;
+
+        _logView.SelectionStart = _logView.TextLength;
+        _logView.SelectionLength = 0;
+        _logView.SelectionColor = GetLineColor(line);
+        _logView.AppendText(line + Environment.NewLine);
+        _lineCount++;
+
+        TrimIfNeeded();
+
+        if (_logView.Created)
+        {
+            _logView.SelectionStart = _logView.TextLength;
+            _logView.ScrollToCaret();
         }
     }
 
