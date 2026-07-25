@@ -175,28 +175,49 @@ public sealed class GitHubUpdateService : IUpdateService
             SetAvailability(UpdateAvailability.Downloading);
 
             var tempDir = Path.Combine(Path.GetTempPath(), $"antiafk-update-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(tempDir);
-            var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
-
-            await using (var fileStream = File.Create(exePath))
-            await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+            try
             {
-                await downloadStream.CopyToAsync(fileStream, cancellationToken);
+                Directory.CreateDirectory(tempDir);
+                var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
+
+                await using (var fileStream = File.Create(exePath))
+                await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+                {
+                    await downloadStream.CopyToAsync(fileStream, cancellationToken);
+                }
+
+                if (new FileInfo(exePath).Length == 0)
+                {
+                    _logger.Error("Downloaded update file is empty.");
+                    SetAvailability(UpdateAvailability.None);
+                    return;
+                }
+
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
+
+                SetAvailability(UpdateAvailability.Ready);
+                _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
             }
-
-            if (new FileInfo(exePath).Length == 0)
+            catch (Exception ex)
             {
-                _logger.Error("Downloaded update file is empty.");
-                Directory.Delete(tempDir, true);
+                _logger.Error($"Failed to download update {remoteVersion}.", ex);
                 SetAvailability(UpdateAvailability.None);
-                return;
             }
-
-            _downloadedExePath = exePath;
-            _downloadedTempDir = tempDir;
-
-            SetAvailability(UpdateAvailability.Ready);
-            _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir) && _downloadedTempDir != tempDir)
+                    {
+                        Directory.Delete(tempDir, true);
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+            }
         }
         catch (OperationCanceledException)
         {
