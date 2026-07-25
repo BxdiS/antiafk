@@ -1,4 +1,4 @@
-# Claude Code Guidelines for antiafk Project
+# Claude Code Guidelines
 
 ## Pull Request Requirements
 
@@ -21,8 +21,6 @@ When creating a feature branch and making changes:
 3. **PR Description should include:**
    - Clear summary of changes
    - List of key modifications
-   - Testing notes
-   - 🤖 Generated with Claude Code (footer)
 
 4. **After PR is merged:**
    - Delete the local branch: `git branch -D branch-name`
