@@ -68,19 +68,21 @@ public sealed class InputService : IInputService
             System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Setting cursor position to ({screenX}, {screenY})");
             System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
 
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Cursor set, waiting 30ms");
-            Thread.Sleep(30);
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Cursor set, waiting 300ms for mouse to settle");
+            Thread.Sleep(300); // Increased from 30ms to ensure cursor has time to physically move
 
             System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTDOWN");
             NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
 
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Waiting 80ms");
-            Thread.Sleep(80);
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Waiting 100ms between down and up");
+            Thread.Sleep(100); // Increased from 80ms for more natural click duration
 
             System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTUP");
             NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
 
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Click complete");
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Click complete, waiting 200ms before next action");
+            Thread.Sleep(200); // Added delay after click completes to prevent rapid re-positioning
+
         }
         catch (Exception ex)
         {
