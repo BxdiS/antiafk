@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
@@ -250,6 +251,42 @@ public sealed class GitHubUpdateService : IUpdateService
         client.DefaultRequestHeaders.UserAgent.ParseAdd($"{AppBranding.TechnicalId}-updater");
         client.Timeout = TimeSpan.FromSeconds(30);
         return client;
+    }
+
+    private async Task<bool> VerifyDownloadedFileAsync(string exePath, string downloadUrl, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sha256Path = downloadUrl + ".sha256";
+            using var checksumResponse = await _http.GetAsync(sha256Path, cancellationToken);
+            if (!checksumResponse.IsSuccessStatusCode)
+            {
+                _logger.Warning("Could not download checksum file for verification.");
+                return true;
+            }
+
+            var checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
+            var expectedHash = checksumText.Split(' ')[0].ToLower();
+
+            using var sha256 = SHA256.Create();
+            await using var stream = File.OpenRead(exePath);
+            var hash = await sha256.ComputeHashAsync(stream, cancellationToken);
+            var actualHash = BitConverter.ToString(hash).Replace("-", "").ToLower();
+
+            if (expectedHash != actualHash)
+            {
+                _logger.Error($"Checksum mismatch: expected {expectedHash}, got {actualHash}");
+                return false;
+            }
+
+            _logger.Info("Download verification passed.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Download verification error.", ex);
+            return true;
+        }
     }
 
     private void SetAvailability(UpdateAvailability availability)
