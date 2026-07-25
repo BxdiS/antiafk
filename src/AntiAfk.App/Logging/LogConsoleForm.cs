@@ -171,7 +171,7 @@ public sealed class LogConsoleForm : Form
                 return;
             }
 
-            if (!_logView?.Created == true)
+            if (_logView?.Created != true)
             {
                 return;
             }
@@ -217,7 +217,7 @@ public sealed class LogConsoleForm : Form
     {
         try
         {
-            if (_lineCount <= MaxDocumentLines || _logView?.IsDisposed == true)
+            if (_lineCount <= MaxDocumentLines || _logView?.IsDisposed == true || _logView == null)
             {
                 return;
             }

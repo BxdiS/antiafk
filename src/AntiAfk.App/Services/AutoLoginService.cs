@@ -72,12 +72,14 @@ public sealed class AutoLoginService
 
             if (File.Exists(launcherPath))
             {
+                _logger.Info($"Found Majestic Launcher at: {launcherPath}");
                 Process.Start(launcherPath);
-                await Task.Delay(2000, cancellationToken);
+                _logger.Info("Launcher process started, waiting for UI to initialize...");
+                await Task.Delay(3000, cancellationToken); // Increased from 2s to 3s for UI initialization
             }
             else
             {
-                _logger.Warning("Majestic Launcher not found, assuming it's already running");
+                _logger.Warning($"Majestic Launcher not found at {launcherPath}, assuming it's already running");
             }
         }
         catch (Exception ex)
@@ -91,8 +93,9 @@ public sealed class AutoLoginService
         // Wait for launcher to load (check pixel at 580, 200 ≈ e81c5a)
         var loaded = false;
         var attempts = 0;
+        const int maxWaitAttempts = 120; // 60 seconds
 
-        while (!loaded && attempts < 60)
+        while (!loaded && attempts < maxWaitAttempts)
         {
             if (IsPixelColor(580, 200, 0xe81c5a, tolerance: 30))
             {
@@ -106,12 +109,32 @@ public sealed class AutoLoginService
 
         if (!loaded)
         {
-            _logger.Warning("Launcher did not load within timeout");
+            _logger.Warning("Launcher did not load within timeout (60 seconds), attempting click anyway");
+        }
+        else
+        {
+            _logger.Info("Launcher detected as loaded");
         }
 
-        // Click login button at 967, 475
-        _inputService.ClickScreen(967, 475);
-        await Task.Delay(1000, cancellationToken);
+        // Click login button at 967, 475 with retry logic
+        for (int i = 0; i < 3; i++)
+        {
+            _inputService.ClickScreen(967, 475);
+            _logger.Info($"Clicked login button (attempt {i + 1}/3)");
+            await Task.Delay(1500, cancellationToken);
+
+            // Verify click was successful by checking if we moved past login screen
+            if (!IsPixelColor(580, 200, 0xe81c5a, tolerance: 30))
+            {
+                _logger.Info("Login button click successful - launcher changed state");
+                break;
+            }
+
+            if (i < 2)
+            {
+                _logger.Warning("Login click did not change state, retrying...");
+            }
+        }
     }
 
     private async Task WaitForGTA5Async(CancellationToken cancellationToken)
