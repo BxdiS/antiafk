@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance: writes the attestation to the repo's
+  # /attestations store and requests an OIDC token used to sign the SLSA provenance.
+  attestations: write
+  id-token: write
 
 env:
   PROJECT_PATH: src/AntiAfk.App/AntiAfk.App.csproj
@@ -74,6 +78,16 @@ jobs:
           }
 
           Write-Host "OK: single self-contained artifact, $([math]::Round($exe.Length/1MB,1)) MB"
+
+      - name: Attest build provenance
+        # Produces a signed SLSA provenance attestation linking AntiAFK.exe to this workflow
+        # run. GitHub shows a "Verified" badge next to the asset on the release page, and
+        # anyone can verify the exe locally with `gh attestation verify AntiAFK.exe --repo
+        # BxdiS/antiafk`. Attesting before the checksum step makes sure the bytes we sign are
+        # exactly the ones going into the release.
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: publish/AntiAFK.exe
 
       - name: Compute checksum
         shell: pwsh
@@ -154,5 +168,6 @@ jobs:
           echo "- Tag: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Asset: \`AntiAFK.exe\` (portable, no installer)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Attested: SLSA build provenance, verify with \`gh attestation verify AntiAFK.exe --repo ${{ github.repository }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "[Open release on GitHub](https://github.com/${{ github.repository }}/releases)" >> "$GITHUB_STEP_SUMMARY"
