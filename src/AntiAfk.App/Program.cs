@@ -63,7 +63,14 @@ internal static class Program
 
         var engineHost = new EngineHostService(engine, progressStore, windowService, logger, localization);
         var updateService = new GitHubUpdateService(configService, logger);
-        _ = updateService.InitializeAsync();
+        try
+        {
+            _ = updateService.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Failed to initialize update service: {ex.Message}");
+        }
 
         logger.Info($"{AppBranding.DisplayName} started.");
 

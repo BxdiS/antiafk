@@ -59,19 +59,7 @@ jobs:
           $hash = Get-FileHash -Path "publish/AntiAFK.exe" -Algorithm SHA256
           "$($hash.Hash.ToLower())  AntiAFK.exe" | Set-Content -Path "publish/AntiAFK.exe.sha256" -NoNewline
 
-      - name: Generate release notes
-        id: notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          NOTES=$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
-            -f tag_name="${{ github.ref_name }}" \
-            -f target_commitish=main \
-            --jq .body)
-          echo "$NOTES" > release_notes.md
-
-      - name: Create release
+      - name: Create release with auto-generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -80,7 +68,7 @@ jobs:
             "publish/AntiAFK.exe" \
             "publish/AntiAFK.exe.sha256" \
             --title "AntiAFK v${{ steps.version.outputs.version }}" \
-            --notes-file release_notes.md
+            --generate-notes
 
       - name: Release summary
         shell: bash

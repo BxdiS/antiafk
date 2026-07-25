@@ -59,18 +59,25 @@ public sealed class LogConsoleForm : Form
 
     private void OnLineLogged(string line)
     {
-        if (IsDisposed)
+        try
         {
-            return;
-        }
+            if (IsDisposed)
+            {
+                return;
+            }
 
-        if (InvokeRequired)
+            if (InvokeRequired)
+            {
+                BeginInvoke(() => AppendLine(line));
+                return;
+            }
+
+            AppendLine(line);
+        }
+        catch (ObjectDisposedException)
         {
-            BeginInvoke(() => AppendLine(line));
-            return;
+            // Form was disposed between the IsDisposed check and the BeginInvoke call
         }
-
-        AppendLine(line);
     }
 
     private void AppendLine(string line)

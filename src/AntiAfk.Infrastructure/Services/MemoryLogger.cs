@@ -52,6 +52,13 @@ public sealed class MemoryLogger : IAppLogger
             }
         }
 
-        LineLogged?.Invoke(line);
+        try
+        {
+            LineLogged?.Invoke(line);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LineLogged handler threw: {ex.Message}");
+        }
     }
 }
