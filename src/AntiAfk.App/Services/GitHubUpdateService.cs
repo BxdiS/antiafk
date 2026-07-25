@@ -13,6 +13,7 @@ public sealed class GitHubUpdateService : IUpdateService
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
+    private static readonly Version CurrentVersion = GetCurrentVersionInternal();
 
     private System.Threading.Timer? _timer;
     private bool _isChecking;
@@ -107,7 +108,17 @@ public sealed class GitHubUpdateService : IUpdateService
     {
         var hours = Math.Max(1, _configService.Current.Update.CheckIntervalHours);
         _timer = new System.Threading.Timer(
-            _ => _ = CheckAndDownloadAsync(CancellationToken.None),
+            async _ =>
+            {
+                try
+                {
+                    await CheckAndDownloadAsync(CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("Periodic update check failed.", ex);
+                }
+            },
             null,
             TimeSpan.FromHours(hours),
             TimeSpan.FromHours(hours));
@@ -222,7 +233,9 @@ public sealed class GitHubUpdateService : IUpdateService
         }
     }
 
-    private static Version GetCurrentVersion() =>
+    private static Version GetCurrentVersion() => CurrentVersion;
+
+    private static Version GetCurrentVersionInternal() =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
     private static HttpClient CreateHttpClient()
