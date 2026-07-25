@@ -1,6 +1,13 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AntiAfk.Infrastructure.Localization;
+
+[JsonSourceGenerationOptions(WriteIndented = false)]
+[JsonSerializable(typeof(Dictionary<string, string>))]
+public partial class LocalizationJsonContext : JsonSerializerContext
+{
+}
 
 public sealed class LocalizationService
 {
@@ -92,7 +99,11 @@ public sealed class LocalizationService
 
     private void Load(string language, string json)
     {
-        var dictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+        var options = new JsonSerializerOptions
+        {
+            TypeInfoResolver = new LocalizationJsonContext()
+        };
+        var dictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(json, options) ?? new Dictionary<string, string>();
         _translations[language] = dictionary;
     }
 }
