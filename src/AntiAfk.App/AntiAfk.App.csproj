@@ -21,7 +21,20 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <StripSymbols>true</StripSymbols>
+    <!-- The release asset must stay a single portable file: the README promises one .exe, and
+         GitHubUpdateService applies updates by moving the downloaded AntiAFK.exe over the running
+         one. A plain self-contained publish emits ~247 loose files, so the uploaded exe alone
+         would not run and auto-update would break existing installs.
+         IncludeNativeLibrariesForSelfExtract is required as well - without it the WindowsDesktop
+         native libraries (wpfgfx_cor3, PresentationNative_cor3, D3DCompiler_47_cor3, PenImc_cor3,
+         vcruntime140_cor3) are left next to the exe instead of being bundled. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <!-- DebugType only suppresses this project's own symbols; without this the referenced
+         Core/Infrastructure .pdb files are still copied next to the exe. -->
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
     <!-- PublishAot is intentionally NOT used: RichTextBox registers an IRichEditOleCallback via
          COM on handle creation (RichTextBox.OnHandleCreated -> UpdateOleCallback), and the
          source-generated COM interop path required by Native AOT throws
