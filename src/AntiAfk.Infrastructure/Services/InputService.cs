@@ -63,11 +63,30 @@ public sealed class InputService : IInputService
 
     public void ClickScreen(int screenX, int screenY)
     {
-        System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
-        Thread.Sleep(30);
-        NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-        Thread.Sleep(80);
-        NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Setting cursor position to ({screenX}, {screenY})");
+            System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
+
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Cursor set, waiting 30ms");
+            Thread.Sleep(30);
+
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTDOWN");
+            NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Waiting 80ms");
+            Thread.Sleep(80);
+
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTUP");
+            NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Click complete");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Exception: {ex.Message}");
+            throw;
+        }
     }
 
     public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY)

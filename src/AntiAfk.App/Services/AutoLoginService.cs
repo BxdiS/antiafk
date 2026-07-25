@@ -90,42 +90,38 @@ public sealed class AutoLoginService
 
     private async Task ClickMajesticLoginAsync(CancellationToken cancellationToken)
     {
-        // Wait for launcher to load (check if window exists within bounds)
+        _logger.Info("ClickMajesticLoginAsync: Starting wait for launcher window...");
+
+        // Wait for launcher to load with simple delay (launcher is visible after LaunchMajesticAsync)
         // Launcher window: left=410, top=170, right=1570, bottom=907
-        var windowBounds = (left: 410, top: 170, right: 1570, bottom: 907);
-        var loaded = false;
-        var attempts = 0;
-        const int maxWaitAttempts = 120; // 60 seconds
+        const int waitTimeSeconds = 5;
+        _logger.Info($"ClickMajesticLoginAsync: Waiting {waitTimeSeconds} seconds for launcher UI to fully render...");
 
-        while (!loaded && attempts < maxWaitAttempts)
+        for (int i = 0; i < waitTimeSeconds; i++)
         {
-            // Try to detect if launcher window is visible by checking a few pixels within the window
-            if (IsPixelColorSafe(windowBounds.left + 50, windowBounds.top + 50))
-            {
-                loaded = true;
-                break;
-            }
-
-            await Task.Delay(500, cancellationToken);
-            attempts++;
-        }
-
-        if (!loaded)
-        {
-            _logger.Warning("Launcher window did not appear within timeout (60 seconds), but attempting click anyway");
-        }
-        else
-        {
-            _logger.Info("Launcher window detected");
+            _logger.Info($"ClickMajesticLoginAsync: Waiting... ({i + 1}/{waitTimeSeconds})");
+            await Task.Delay(1000, cancellationToken);
         }
 
         // Click login button at 950, 487
         const int loginButtonX = 950;
         const int loginButtonY = 487;
 
-        _inputService.ClickScreen(loginButtonX, loginButtonY);
-        _logger.Info($"Clicked login button at ({loginButtonX}, {loginButtonY})");
+        _logger.Info($"ClickMajesticLoginAsync: About to click button at ({loginButtonX}, {loginButtonY})");
+        try
+        {
+            _inputService.ClickScreen(loginButtonX, loginButtonY);
+            _logger.Info($"ClickMajesticLoginAsync: Successfully clicked login button at ({loginButtonX}, {loginButtonY})");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"ClickMajesticLoginAsync: Failed to click button: {ex.Message}", ex);
+            throw;
+        }
+
+        _logger.Info("ClickMajesticLoginAsync: Waiting 2 seconds after click...");
         await Task.Delay(2000, cancellationToken);
+        _logger.Info("ClickMajesticLoginAsync: Complete");
     }
 
     private async Task WaitForGTA5Async(CancellationToken cancellationToken)
