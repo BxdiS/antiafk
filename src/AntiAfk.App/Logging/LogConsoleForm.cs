@@ -5,6 +5,7 @@ namespace AntiAfk.App.Logging;
 public sealed class LogConsoleForm : Form
 {
     private const int MaxDocumentLines = 2500;
+    private const int LoadBatchSize = 100;
 
     private static readonly Color InfoColor = Color.FromArgb(0xC9, 0xD1, 0xD9);
     private static readonly Color WarnColor = Color.FromArgb(0xD2, 0x99, 0x22);
@@ -13,13 +14,16 @@ public sealed class LogConsoleForm : Form
 
     private readonly IAppLogger _logger;
     private readonly RichTextBox _logView;
+    private Font? _consoleFont;
     private int _lineCount;
+    private bool _initialLoadComplete;
 
     public LogConsoleForm(IAppLogger logger)
     {
         try
         {
             _logger = logger;
+            _initialLoadComplete = false;
 
             Text = "AntiAFK — Logs";
             Width = 820;
@@ -37,12 +41,14 @@ public sealed class LogConsoleForm : Form
                 // ignored - icon is cosmetic only
             }
 
+            _consoleFont = new Font("Consolas", 10f);
+
             _logView = new RichTextBox
             {
                 Dock = DockStyle.Fill,
                 BackColor = Color.FromArgb(0x0D, 0x11, 0x17),
                 ForeColor = InfoColor,
-                Font = new Font("Consolas", 10f),
+                Font = _consoleFont,
                 ReadOnly = true,
                 BorderStyle = BorderStyle.None,
                 WordWrap = false,
@@ -50,29 +56,8 @@ public sealed class LogConsoleForm : Form
             };
             Controls.Add(_logView);
 
-            try
-            {
-                // Load existing log buffer with error handling for large buffers
-                var buffer = _logger.Buffer;
-                if (buffer != null && buffer.Count > 0)
-                {
-                    foreach (var line in buffer)
-                    {
-                        try
-                        {
-                            AppendLineInternal(line);
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Error appending buffer line: {ex.Message}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error loading log buffer: {ex.Message}");
-            }
+            // Load buffer asynchronously after form is shown
+            this.Shown += async (_, _) => await LoadBufferAsync();
 
             _logger.LineLogged += OnLineLogged;
             FormClosed += (_, _) =>
@@ -82,6 +67,8 @@ public sealed class LogConsoleForm : Form
                     _logger.LineLogged -= OnLineLogged;
                 }
                 catch { }
+
+                _consoleFont?.Dispose();
             };
         }
         catch (Exception ex)
@@ -91,11 +78,68 @@ public sealed class LogConsoleForm : Form
         }
     }
 
+    private async Task LoadBufferAsync()
+    {
+        try
+        {
+            var buffer = _logger.Buffer;
+            if (buffer == null || buffer.Count == 0)
+            {
+                _initialLoadComplete = true;
+                return;
+            }
+
+            // Load in batches to avoid blocking UI thread
+            for (int i = 0; i < buffer.Count; i += LoadBatchSize)
+            {
+                if (_logView.IsDisposed)
+                    return;
+
+                try
+                {
+                    int end = Math.Min(i + LoadBatchSize, buffer.Count);
+                    for (int j = i; j < end; j++)
+                    {
+                        try
+                        {
+                            AppendLineInternal(buffer[j]);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error appending buffer line: {ex.Message}");
+                        }
+                    }
+
+                    // Allow UI thread to update
+                    await Task.Delay(10);
+                    Application.DoEvents();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error loading batch: {ex.Message}");
+                }
+            }
+
+            _initialLoadComplete = true;
+
+            if (!_logView.IsDisposed)
+            {
+                _logView.SelectionStart = _logView.TextLength;
+                _logView.ScrollToCaret();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading log buffer: {ex.Message}");
+            _initialLoadComplete = true;
+        }
+    }
+
     private void OnLineLogged(string line)
     {
         try
         {
-            if (IsDisposed)
+            if (IsDisposed || _logView?.IsDisposed == true)
             {
                 return;
             }
@@ -110,7 +154,11 @@ public sealed class LogConsoleForm : Form
         }
         catch (ObjectDisposedException)
         {
-            // Form was disposed between the IsDisposed check and the BeginInvoke call
+            // Form was disposed
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LogConsoleForm.OnLineLogged error: {ex.Message}");
         }
     }
 
@@ -136,7 +184,7 @@ public sealed class LogConsoleForm : Form
         }
         catch (InvalidOperationException)
         {
-            // Control accessed from non-UI thread or control not created
+            // Control accessed from non-UI thread
         }
         catch (Exception ex)
         {
@@ -146,7 +194,7 @@ public sealed class LogConsoleForm : Form
 
     private void AppendLineInternal(string line)
     {
-        if (_logView == null)
+        if (_logView == null || _logView.IsDisposed)
             return;
 
         _logView.SelectionStart = _logView.TextLength;
@@ -157,7 +205,8 @@ public sealed class LogConsoleForm : Form
 
         TrimIfNeeded();
 
-        if (_logView.Created)
+        // Only scroll to end if initial load is complete and we're accepting new logs
+        if (_initialLoadComplete && _logView.Created)
         {
             _logView.SelectionStart = _logView.TextLength;
             _logView.ScrollToCaret();
@@ -168,12 +217,7 @@ public sealed class LogConsoleForm : Form
     {
         try
         {
-            if (_lineCount <= MaxDocumentLines)
-            {
-                return;
-            }
-
-            if (_logView.IsDisposed)
+            if (_lineCount <= MaxDocumentLines || _logView?.IsDisposed == true)
             {
                 return;
             }
