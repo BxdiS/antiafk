@@ -188,39 +188,26 @@ public sealed class GitHubUpdateService : IUpdateService
             await using (var fileStream = File.Create(exePath))
             await using (var downloadStream = await HttpClient.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
             {
-                Directory.CreateDirectory(tempDir);
-                var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
-
-                await using (var fileStream = File.Create(exePath))
-                await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
-                {
-                    await downloadStream.CopyToAsync(fileStream, cancellationToken);
-                }
-
-                if (new FileInfo(exePath).Length == 0)
-                {
-                    _logger.Error("Downloaded update file is empty.");
-                    SetAvailability(UpdateAvailability.None);
-                    return;
-                }
-
-                _downloadedExePath = exePath;
-                _downloadedTempDir = tempDir;
-
-                SetAvailability(UpdateAvailability.Ready);
-                _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
+                await downloadStream.CopyToAsync(fileStream, cancellationToken);
             }
-            catch (Exception ex)
+
+            if (new FileInfo(exePath).Length == 0)
             {
-                _logger.Error($"Failed to download update {remoteVersion}.", ex);
+                _logger.Error("Downloaded update file is empty.");
+                Directory.Delete(tempDir, true);
                 SetAvailability(UpdateAvailability.None);
+                return;
             }
 
-            lock (_sync)
+            if (!await VerifyDownloadedFileAsync(exePath, asset.BrowserDownloadUrl, cancellationToken))
             {
-                _downloadedExePath = exePath;
-                _downloadedTempDir = tempDir;
+                _logger.Warning("Downloaded file verification failed.");
+                Directory.Delete(tempDir, true);
+                return;
             }
+
+            _downloadedExePath = exePath;
+            _downloadedTempDir = tempDir;
 
             SetAvailability(UpdateAvailability.Ready);
             _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
@@ -258,7 +245,7 @@ public sealed class GitHubUpdateService : IUpdateService
         try
         {
             var sha256Path = downloadUrl + ".sha256";
-            using var checksumResponse = await _http.GetAsync(sha256Path, cancellationToken);
+            using var checksumResponse = await HttpClient.GetAsync(sha256Path, cancellationToken);
             if (!checksumResponse.IsSuccessStatusCode)
             {
                 _logger.Warning("Could not download checksum file for verification.");
