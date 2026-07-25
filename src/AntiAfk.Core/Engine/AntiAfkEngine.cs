@@ -141,25 +141,25 @@ public sealed class AntiAfkEngine
             return false;
         }
 
-        // Fire and forget auto-login sequence (does not block game window detection)
+        // Run the auto-login sequence to completion BEFORE we bind the window and
+        // hand off to startup recovery. Doing this sequentially (not fire-and-forget)
+        // prevents a race where SmartStateRecovery tries to open the marketplace while
+        // the player is still on the launcher / character-select screen.
         if (_autoLoginService is not null)
         {
-            _logger.Info("Starting auto-login sequence in background...");
-            _ = Task.Run(async () =>
+            _logger.Info("Running auto-login sequence...");
+            try
             {
-                try
-                {
-                    await _autoLoginService.AutoLoginAsync(cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.Warning("Auto-login was cancelled");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error("Auto-login task failed", ex);
-                }
-            }, cancellationToken);
+                await _autoLoginService.AutoLoginAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Auto-login sequence failed", ex);
+            }
         }
         else
         {

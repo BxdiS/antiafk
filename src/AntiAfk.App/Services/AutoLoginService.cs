@@ -5,6 +5,15 @@ namespace AntiAfk.App.Services;
 
 public sealed class AutoLoginService : IAutoLoginService
 {
+    // Server-connected / character-select indicator pixel (approx. ff007e)
+    private const int ServerPixelX = 634;
+    private const int ServerPixelY = 216;
+    private const uint ServerPixelColor = 0xff007e;
+
+    // Launcher login button
+    private const int LoginButtonX = 950;
+    private const int LoginButtonY = 487;
+
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;
     private readonly IInputService _inputService;
@@ -22,111 +31,67 @@ public sealed class AutoLoginService : IAutoLoginService
         {
             _logger.Info("Starting auto-login sequence...");
 
-            // Step 1: Launch Majestic Launcher
-            await LaunchMajesticAsync(cancellationToken);
-            _logger.Info("Majestic Launcher launched");
+            // Note: the launcher is already started by the engine (GameLauncherService)
+            // before this sequence runs, so we do NOT launch it again here.
 
-            // Step 2: Wait for launcher to load and click login
+            // Step 1: Wait for launcher UI, then click the login button
             await ClickMajesticLoginAsync(cancellationToken);
-            _logger.Info("Clicked Majestic login button");
 
-            // Step 3: Wait for GTA5.exe to start
+            // Step 2: Wait for GTA5.exe process to start
             await WaitForGTA5Async(cancellationToken);
-            _logger.Info("GTA5.exe started");
 
-            // Step 4: Wait for server connection
-            await WaitForServerConnectionAsync(cancellationToken);
-            _logger.Info("Connected to server");
+            // Step 3: Wait until the server-connected / character-select screen appears
+            var reached = await WaitForServerConnectionAsync(cancellationToken);
+            if (!reached)
+            {
+                _logger.Warning("Auto-login: character-select screen not detected; skipping automated selection");
+                return;
+            }
 
-            // Step 5: Handle character selection
+            // Step 4: Character selection (1 of 3)
             await SelectCharacterAsync(characterSlot, cancellationToken);
-            _logger.Info($"Selected character slot {characterSlot}");
 
-            // Step 6: Select spawn location
+            // Step 5: Spawn selection
             await SelectSpawnAsync(spawnSlot, cancellationToken);
-            _logger.Info($"Selected spawn slot {spawnSlot}");
 
-            // Step 7: Wait for full game load
+            // Step 6: Wait for the in-game HUD (fully loaded)
             await WaitForGameLoadAsync(cancellationToken);
-            _logger.Info("Game fully loaded");
 
             _logger.Info("Auto-login sequence completed successfully");
         }
         catch (OperationCanceledException)
         {
             _logger.Warning("Auto-login cancelled");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error("Auto-login failed", ex);
             throw;
         }
-    }
-
-    private async Task LaunchMajesticAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var launcherPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Majestic RP", "Launcher", "MajesticRPLauncher.exe");
-
-            if (File.Exists(launcherPath))
-            {
-                _logger.Info($"Found Majestic Launcher at: {launcherPath}");
-                Process.Start(launcherPath);
-                _logger.Info("Launcher process started, waiting for UI to initialize...");
-                await Task.Delay(3000, cancellationToken); // Increased from 2s to 3s for UI initialization
-            }
-            else
-            {
-                _logger.Warning($"Majestic Launcher not found at {launcherPath}, assuming it's already running");
-            }
-        }
         catch (Exception ex)
         {
-            _logger.Error("Failed to launch Majestic", ex);
+            // Do not rethrow: the engine awaits this and should continue to bind
+            // the game window and run its own state recovery even if login partially fails.
+            _logger.Error("Auto-login failed", ex);
         }
     }
 
     private async Task ClickMajesticLoginAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("ClickMajesticLoginAsync: Starting wait for launcher window...");
-
-        // Wait for launcher to load with simple delay (launcher is visible after LaunchMajesticAsync)
-        // Launcher window: left=410, top=170, right=1570, bottom=907
+        // Launcher was already started by the engine. Give the UI time to render,
+        // then click the login button. (Launcher window: 410,170 -> 1570,907)
         const int waitTimeSeconds = 5;
-        _logger.Info($"ClickMajesticLoginAsync: Waiting {waitTimeSeconds} seconds for launcher UI to fully render...");
+        _logger.Info($"Auto-login: waiting {waitTimeSeconds}s for launcher UI to render...");
 
         for (int i = 0; i < waitTimeSeconds; i++)
         {
-            _logger.Info($"ClickMajesticLoginAsync: Waiting... ({i + 1}/{waitTimeSeconds})");
             await Task.Delay(1000, cancellationToken);
         }
 
-        // Click login button at 950, 487
-        const int loginButtonX = 950;
-        const int loginButtonY = 487;
-
-        _logger.Info($"ClickMajesticLoginAsync: About to click button at ({loginButtonX}, {loginButtonY})");
-        try
-        {
-            _inputService.ClickScreen(loginButtonX, loginButtonY);
-            _logger.Info($"ClickMajesticLoginAsync: Successfully clicked login button at ({loginButtonX}, {loginButtonY})");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"ClickMajesticLoginAsync: Failed to click button: {ex.Message}", ex);
-            throw;
-        }
-
-        _logger.Info("ClickMajesticLoginAsync: Waiting 2 seconds after click...");
+        _logger.Info($"Auto-login: clicking launcher login button at ({LoginButtonX}, {LoginButtonY})");
+        _inputService.ClickScreen(LoginButtonX, LoginButtonY);
         await Task.Delay(2000, cancellationToken);
-        _logger.Info("ClickMajesticLoginAsync: Complete");
     }
 
     private async Task WaitForGTA5Async(CancellationToken cancellationToken)
     {
-        // Wait for GTA5.exe process
+        // Wait for GTA5.exe process (up to 5 minutes)
         var attempts = 0;
         while (Process.GetProcessesByName("GTA5").Length == 0 && attempts < 300)
         {
@@ -144,40 +109,34 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
-    private async Task WaitForServerConnectionAsync(CancellationToken cancellationToken)
+    private async Task<bool> WaitForServerConnectionAsync(CancellationToken cancellationToken)
     {
-        // Wait for initial server connection (check pixel at 630, 210 ≈ ff007e)
-        var connected = false;
+        // Wait for the server-connected / character-select indicator
+        // (pixel 634,216 ~ ff007e). This screen means we can start selecting a character.
         var attempts = 0;
+        const int maxAttempts = 300; // up to 5 minutes
 
-        while (!connected && attempts < 180)
+        while (attempts < maxAttempts)
         {
-            if (IsPixelColor(630, 210, 0xff007e, tolerance: 30))
+            if (IsPixelColor(ServerPixelX, ServerPixelY, ServerPixelColor, tolerance: 40))
             {
-                connected = true;
-                break;
+                _logger.Info("Server connection / character-select screen detected");
+                // Let the UI stabilise before we start clicking
+                await Task.Delay(2000, cancellationToken);
+                return true;
             }
 
             await Task.Delay(1000, cancellationToken);
             attempts++;
         }
 
-        if (!connected)
-        {
-            _logger.Warning("Server connection indicator not detected within timeout");
-        }
-        else
-        {
-            _logger.Info("Server connection detected");
-            // Click to proceed
-            _inputService.ClickScreen(630, 210);
-            await Task.Delay(1000, cancellationToken);
-        }
+        _logger.Warning("Server connection indicator not detected within timeout (5 minutes)");
+        return false;
     }
 
     private async Task SelectCharacterAsync(int characterSlot, CancellationToken cancellationToken)
     {
-        // Check if character 3 is available (not purchased)
+        // Character 3 is only available if purchased; fall back to slot 1 if not.
         var char3Available = IsPixelColor(1226, 1000, 0xe81c5a, tolerance: 30);
 
         int character = characterSlot;
@@ -189,31 +148,33 @@ public sealed class AutoLoginService : IAutoLoginService
 
         var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character);
 
-        // Click select
-        _inputService.ClickScreen(selectX, selectY);
-        await Task.Delay(500, cancellationToken);
+        _logger.Info($"Selecting character {character}: click ({selectX},{selectY}) then confirm ({confirmX},{confirmY})");
 
-        // Click confirm
+        _inputService.ClickScreen(selectX, selectY);
+        await Task.Delay(800, cancellationToken);
+
         _inputService.ClickScreen(confirmX, confirmY);
         await Task.Delay(2000, cancellationToken);
     }
 
     private async Task SelectSpawnAsync(int spawnSlot, CancellationToken cancellationToken)
     {
-        // For now, always use default spawn (1053, 964)
-        _inputService.ClickScreen(1053, 964);
+        var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
+        _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
+        _inputService.ClickScreen(spawnX, spawnY);
         await Task.Delay(1000, cancellationToken);
     }
 
     private async Task WaitForGameLoadAsync(CancellationToken cancellationToken)
     {
-        // Wait for game to fully load (check pixel at 1888, 25 = ff007f)
+        // Wait for the in-game HUD to appear (pixel 1888,25 ~ ff007f)
         var loaded = false;
         var attempts = 0;
+        const int maxAttempts = 300; // up to 5 minutes
 
-        while (!loaded && attempts < 180)
+        while (!loaded && attempts < maxAttempts)
         {
-            if (IsPixelColor(1888, 25, 0xff007f, tolerance: 30))
+            if (IsPixelColor(1888, 25, 0xff007f, tolerance: 40))
             {
                 loaded = true;
                 break;
@@ -225,11 +186,11 @@ public sealed class AutoLoginService : IAutoLoginService
 
         if (!loaded)
         {
-            _logger.Warning("Game load indicator not detected within timeout");
+            _logger.Warning("Game load (HUD) indicator not detected within timeout");
         }
         else
         {
-            _logger.Info("Game fully loaded");
+            _logger.Info("Game fully loaded (HUD detected)");
         }
     }
 
@@ -244,17 +205,13 @@ public sealed class AutoLoginService : IAutoLoginService
         };
     }
 
-    private bool IsPixelColorSafe(int x, int y)
+    private (int spawnX, int spawnY) GetSpawnCoordinates(int spawnSlot)
     {
-        try
+        // Default spawn point; extend here when additional spawn slots are mapped.
+        return spawnSlot switch
         {
-            _ = _screenCapture.GetPixelColor(x, y);
-            return true; // Successfully captured pixel, window exists
-        }
-        catch
-        {
-            return false; // Failed to capture, window may not exist yet
-        }
+            _ => (1053, 964)
+        };
     }
 
     private bool IsPixelColor(int x, int y, uint expectedColor, int tolerance = 30)
@@ -263,23 +220,16 @@ public sealed class AutoLoginService : IAutoLoginService
         {
             var (r, g, b) = _screenCapture.GetPixelColor(x, y);
 
-            var pixelColor = ((uint)r << 16) | ((uint)g << 8) | (uint)b;
             var expected = expectedColor & 0xFFFFFF;
+            var r2 = (int)((expected >> 16) & 0xFF);
+            var g2 = (int)((expected >> 8) & 0xFF);
+            var b2 = (int)(expected & 0xFF);
 
-            var r1 = (pixelColor >> 16) & 0xFF;
-            var g1 = (pixelColor >> 8) & 0xFF;
-            var b1 = pixelColor & 0xFF;
+            var rDiff = Math.Abs(r - r2);
+            var gDiff = Math.Abs(g - g2);
+            var bDiff = Math.Abs(b - b2);
 
-            var r2 = (expected >> 16) & 0xFF;
-            var g2 = (expected >> 8) & 0xFF;
-            var b2 = expected & 0xFF;
-
-            var rDiff = Math.Abs((int)r1 - (int)r2);
-            var gDiff = Math.Abs((int)g1 - (int)g2);
-            var bDiff = Math.Abs((int)b1 - (int)b2);
-
-            var match = rDiff <= tolerance && gDiff <= tolerance && bDiff <= tolerance;
-            return match;
+            return rDiff <= tolerance && gDiff <= tolerance && bDiff <= tolerance;
         }
         catch (ArgumentOutOfRangeException ex)
         {
