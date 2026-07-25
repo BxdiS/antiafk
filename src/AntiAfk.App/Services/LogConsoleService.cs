@@ -10,20 +10,35 @@ public sealed class LogConsoleService
 
     public void Show(IAppLogger logger)
     {
-        if (_window is { IsDisposed: false })
+        try
         {
-            _window.Activate();
-            if (_window.WindowState == FormWindowState.Minimized)
+            if (_window is { IsDisposed: false })
             {
-                _window.WindowState = FormWindowState.Normal;
+                try
+                {
+                    _window.Activate();
+                    if (_window.WindowState == FormWindowState.Minimized)
+                    {
+                        _window.WindowState = FormWindowState.Normal;
+                    }
+                }
+                catch
+                {
+                    _window = null;
+                }
+
+                return;
             }
 
-            return;
+            _window = new Logging.LogConsoleForm(logger);
+            _window.FormClosed += (_, _) => _window = null;
+            _window.Show();
         }
-
-        _window = new Logging.LogConsoleForm(logger);
-        _window.FormClosed += (_, _) => _window = null;
-        _window.Show();
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LogConsoleService.Show error: {ex.Message}");
+            _window = null;
+        }
     }
 
     public void Close()

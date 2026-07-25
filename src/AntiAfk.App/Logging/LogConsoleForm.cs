@@ -82,34 +82,85 @@ public sealed class LogConsoleForm : Form
 
     private void AppendLine(string line)
     {
-        _logView.SelectionStart = _logView.TextLength;
-        _logView.SelectionLength = 0;
-        _logView.SelectionColor = GetLineColor(line);
-        _logView.AppendText(line + Environment.NewLine);
-        _lineCount++;
+        try
+        {
+            if (_logView.IsDisposed || IsDisposed)
+            {
+                return;
+            }
 
-        TrimIfNeeded();
+            if (!_logView.Created)
+            {
+                return;
+            }
 
-        _logView.SelectionStart = _logView.TextLength;
-        _logView.ScrollToCaret();
+            _logView.SelectionStart = _logView.TextLength;
+            _logView.SelectionLength = 0;
+            _logView.SelectionColor = GetLineColor(line);
+            _logView.AppendText(line + Environment.NewLine);
+            _lineCount++;
+
+            TrimIfNeeded();
+
+            _logView.SelectionStart = _logView.TextLength;
+            _logView.ScrollToCaret();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Form or RichTextBox was disposed
+        }
+        catch (InvalidOperationException)
+        {
+            // Control accessed from non-UI thread or control not created
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LogConsoleForm.AppendLine error: {ex.Message}");
+        }
     }
 
     private void TrimIfNeeded()
     {
-        if (_lineCount <= MaxDocumentLines)
+        try
         {
-            return;
-        }
+            if (_lineCount <= MaxDocumentLines)
+            {
+                return;
+            }
 
-        var firstLineEnd = _logView.Text.IndexOf('\n');
-        if (firstLineEnd < 0)
+            if (_logView.IsDisposed)
+            {
+                return;
+            }
+
+            var text = _logView.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            var firstLineEnd = text.IndexOf('\n');
+            if (firstLineEnd < 0)
+            {
+                return;
+            }
+
+            _logView.Select(0, firstLineEnd + 1);
+            _logView.SelectedText = string.Empty;
+            _lineCount--;
+        }
+        catch (ObjectDisposedException)
         {
-            return;
+            // RichTextBox was disposed
         }
-
-        _logView.Select(0, firstLineEnd + 1);
-        _logView.SelectedText = string.Empty;
-        _lineCount--;
+        catch (InvalidOperationException)
+        {
+            // Control accessed from wrong thread
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LogConsoleForm.TrimIfNeeded error: {ex.Message}");
+        }
     }
 
     private static Color GetLineColor(string line)
