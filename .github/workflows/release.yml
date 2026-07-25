@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance: writes the attestation to the repo's
+  # /attestations store and requests an OIDC token used to sign the SLSA provenance.
+  attestations: write
+  id-token: write
 
 env:
   PROJECT_PATH: src/AntiAfk.App/AntiAfk.App.csproj
@@ -75,13 +79,77 @@ jobs:
 
           Write-Host "OK: single self-contained artifact, $([math]::Round($exe.Length/1MB,1)) MB"
 
+      - name: Attest build provenance
+        # Produces a signed SLSA provenance attestation linking AntiAFK.exe to this workflow
+        # run. GitHub shows a "Verified" badge next to the asset on the release page, and
+        # anyone can verify the exe locally with `gh attestation verify AntiAFK.exe --repo
+        # BxdiS/antiafk`. Attesting before the checksum step makes sure the bytes we sign are
+        # exactly the ones going into the release.
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: publish/AntiAFK.exe
+
       - name: Compute checksum
         shell: pwsh
         run: |
           $hash = Get-FileHash -Path "publish/AntiAFK.exe" -Algorithm SHA256
           "$($hash.Hash.ToLower())  AntiAFK.exe" | Set-Content -Path "publish/AntiAFK.exe.sha256" -NoNewline
 
-      - name: Create release with auto-generated notes
+      - name: Prepare release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          # gh release create --generate-notes builds notes only from merged PRs. Releases cut
+          # from commits pushed directly to main (no PR) end up with an empty body containing
+          # just the "Full Changelog" link - which is what happened to v1.1.6 and v1.1.7. Ask
+          # the API for the PR-based notes first, and if none were produced (no PRs in the
+          # window) fall back to a plain commit log for that range so the release page still
+          # says what changed.
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          REPO="${GITHUB_REPOSITORY}"
+
+          PREV=$(gh api "repos/$REPO/releases" \
+            --jq "map(select(.tag_name != \"$TAG\" and (.draft | not) and (.prerelease | not))) | .[0].tag_name // \"\"")
+
+          if [ -n "$PREV" ]; then
+            echo "Previous release: $PREV"
+            PR_NOTES=$(gh api -X POST "repos/$REPO/releases/generate-notes" \
+              -f tag_name="$TAG" -f previous_tag_name="$PREV" --jq '.body' 2>/dev/null || echo "")
+            COMPARE_LINK="**Full Changelog**: https://github.com/$REPO/compare/$PREV...$TAG"
+            RANGE="$PREV..HEAD"
+          else
+            echo "No previous release; using full history."
+            PR_NOTES=$(gh api -X POST "repos/$REPO/releases/generate-notes" \
+              -f tag_name="$TAG" --jq '.body' 2>/dev/null || echo "")
+            COMPARE_LINK=""
+            RANGE="HEAD"
+          fi
+
+          # GitHub returns a "What's Changed" section only when at least one PR is found;
+          # without that, PR_NOTES contains only the compare link (or is empty). Detect that
+          # and switch to the commit-log fallback.
+          if printf '%s' "$PR_NOTES" | grep -q "^## What's Changed"; then
+            echo "Using GitHub-generated PR notes."
+            printf '%s\n' "$PR_NOTES" > release-notes.md
+          else
+            echo "No merged PRs in this range; generating notes from commit log."
+            {
+              echo "## Changes"
+              echo
+              git log --no-merges --pretty=format:'* %s (%h)' "$RANGE"
+              echo
+              echo
+              [ -n "$COMPARE_LINK" ] && echo "$COMPARE_LINK"
+            } > release-notes.md
+          fi
+
+          echo "----- release notes preview -----"
+          cat release-notes.md
+          echo "----- end preview -----"
+
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -90,7 +158,7 @@ jobs:
             "publish/AntiAFK.exe" \
             "publish/AntiAFK.exe.sha256" \
             --title "AntiAFK v${{ steps.version.outputs.version }}" \
-            --generate-notes
+            --notes-file release-notes.md
 
       - name: Release summary
         shell: bash
@@ -100,5 +168,6 @@ jobs:
           echo "- Tag: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: \`${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Asset: \`AntiAFK.exe\` (portable, no installer)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Attested: SLSA build provenance, verify with \`gh attestation verify AntiAFK.exe --repo ${{ github.repository }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "[Open release on GitHub](https://github.com/${{ github.repository }}/releases)" >> "$GITHUB_STEP_SUMMARY"
