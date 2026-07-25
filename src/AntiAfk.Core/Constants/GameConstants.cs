@@ -27,5 +27,13 @@ public static class GameConstants
     public static readonly (int X, int Y) BaseHudPixel = (1888, 25);
     public static readonly (int X, int Y) BaseMpPixel = (1770, 34);
 
+    // Character-select screen indicator. NOTE: this shares the same pink accent colour as the
+    // in-game HUD pixel, so this check must run BEFORE the HUD check when classifying UI state.
+    public static readonly (int X, int Y) BaseCharSelectPixel = (1870, 52);
+    public const byte CharSelectR = 0xE8;
+    public const byte CharSelectG = 0x1C;
+    public const byte CharSelectB = 0x5A;
+    public const int CharSelectTolerance = 40;
+
     public const string GameProcessName = "GTA5";
 }

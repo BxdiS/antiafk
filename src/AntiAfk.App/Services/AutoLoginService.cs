@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 
 namespace AntiAfk.App.Services;
 
@@ -13,9 +14,11 @@ public sealed class AutoLoginService : IAutoLoginService
     // Character-select screen indicator (approx. e81c5a). If this is already visible when
     // AutoLoginAsync starts, we're past the launcher and GTA5 is already running - the user
     // may have started the script from this point rather than from the launcher.
-    private const int CharacterSelectPixelX = 1870;
-    private const int CharacterSelectPixelY = 52;
-    private const uint CharacterSelectPixelColor = 0xe81c5a;
+    // Kept in sync with GameConstants.BaseCharSelectPixel, which StateDetector uses (scaled).
+    private static readonly int CharacterSelectPixelX = GameConstants.BaseCharSelectPixel.X;
+    private static readonly int CharacterSelectPixelY = GameConstants.BaseCharSelectPixel.Y;
+    private const uint CharacterSelectPixelColor =
+        ((uint)GameConstants.CharSelectR << 16) | ((uint)GameConstants.CharSelectG << 8) | GameConstants.CharSelectB;
 
     // Launcher login button
     private const int LoginButtonX = 950;
@@ -44,7 +47,7 @@ public sealed class AutoLoginService : IAutoLoginService
             // Step 0: Check if we're already on the character-select screen. This covers the
             // case where the script is started mid-flow (e.g. the user already logged in via
             // the launcher manually) - in that case, skip the launcher click and GTA5 wait.
-            if (IsPixelColor(CharacterSelectPixelX, CharacterSelectPixelY, CharacterSelectPixelColor, tolerance: 40))
+            if (IsPixelColor(CharacterSelectPixelX, CharacterSelectPixelY, CharacterSelectPixelColor, GameConstants.CharSelectTolerance))
             {
                 _logger.Info("Character-select screen already detected - skipping launcher login and GTA5 wait");
             }

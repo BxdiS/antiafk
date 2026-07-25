@@ -183,6 +183,28 @@ public sealed class AntiAfkEngine
         return false;
     }
 
+    private async Task RunAutoLoginIfAtCharacterSelectAsync(CancellationToken cancellationToken)
+    {
+        if (_autoLoginService is null || !_stateDetector.IsAtCharacterSelect())
+        {
+            return;
+        }
+
+        _logger.Info("Character-select screen detected on startup. Running auto-login...");
+        try
+        {
+            await _autoLoginService.AutoLoginAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Auto-login sequence failed", ex);
+        }
+    }
+
     private void BindGameWindow(GameWindowInfo game)
     {
         _gameHandle = game.Handle;
@@ -199,6 +221,12 @@ public sealed class AntiAfkEngine
         RememberUserWindow();
         _windowService.ForceForeground(_gameHandle);
         await DelaySeconds(_configService.Current.Timings.InitFocusDelay, cancellationToken);
+
+        // The game may already be running but still sitting on the character-select screen
+        // (e.g. the user logged in manually, or started the app mid-flow). In that case the
+        // launcher path in EnsureGameWindowAsync was skipped, so auto-login has not run yet.
+        // Finish logging in before any marketplace handling.
+        await RunAutoLoginIfAtCharacterSelectAsync(cancellationToken);
 
         _stateDetector.SmartStateRecovery();
         RestoreUserWindow("Startup");

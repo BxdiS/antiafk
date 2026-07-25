@@ -1,4 +1,5 @@
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
 
@@ -85,6 +86,28 @@ public sealed class StateDetector : IStateDetector
         return false;
     }
 
+    public bool IsAtCharacterSelect()
+    {
+        var coords = _runtime.Coordinates;
+        if (coords is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var (r, g, b) = _screenCapture.GetPixelColor(coords.CharSelectPixelX, coords.CharSelectPixelY);
+            return Math.Abs(r - GameConstants.CharSelectR) <= GameConstants.CharSelectTolerance
+                && Math.Abs(g - GameConstants.CharSelectG) <= GameConstants.CharSelectTolerance
+                && Math.Abs(b - GameConstants.CharSelectB) <= GameConstants.CharSelectTolerance;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"IsAtCharacterSelect: failed to read pixel ({ex.Message}).");
+            return false;
+        }
+    }
+
     public void SmartStateRecovery()
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
@@ -110,6 +133,14 @@ public sealed class StateDetector : IStateDetector
 
         var (rHud, gHud, bHud) = hud;
         var (rMp, gMp, bMp) = mp;
+
+        // Must be checked before the HUD branch: the character-select screen uses the same pink
+        // accent colour as the in-game HUD pixel, so the HUD check alone reports a false "In game".
+        if (IsAtCharacterSelect())
+        {
+            _logger.Info("Status: Character-select screen. Not in game yet - skipping tablet/marketplace.");
+            return;
+        }
 
         if (rMp is >= 15 and <= 50 && gMp is >= 45 and <= 90 && bMp is >= 85 and <= 130)
         {

@@ -23,4 +23,6 @@ public sealed class ScaledCoordinates
     public int HudPixelY { get; init; }
     public int MpPixelX { get; init; }
     public int MpPixelY { get; init; }
+    public int CharSelectPixelX { get; init; }
+    public int CharSelectPixelY { get; init; }
 }
