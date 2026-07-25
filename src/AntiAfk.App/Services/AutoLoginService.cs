@@ -278,11 +278,22 @@ public sealed class AutoLoginService
             var gDiff = Math.Abs((int)g1 - (int)g2);
             var bDiff = Math.Abs((int)b1 - (int)b2);
 
-            return rDiff <= tolerance && gDiff <= tolerance && bDiff <= tolerance;
+            var match = rDiff <= tolerance && gDiff <= tolerance && bDiff <= tolerance;
+            return match;
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _logger.Error($"Invalid pixel coordinates ({x}, {y}): {ex.Message}");
+            return false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.Warning($"Failed to capture pixel at ({x}, {y}), screen may be locked or scaling issue: {ex.Message}");
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.Error($"Error checking pixel color at ({x}, {y}): {ex.Message}");
+            _logger.Error($"Unexpected error checking pixel color at ({x}, {y}): {ex.Message}", ex);
             return false;
         }
     }
