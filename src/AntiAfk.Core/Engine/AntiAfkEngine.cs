@@ -19,7 +19,7 @@ public sealed class AntiAfkEngine
     private IntPtr _gameHandle;
     private UserWindowInfo? _userWindow;
     private UserWindowInfo? _pendingUserWindow;
-    private ScaledCoordinates _coordinates = null!;
+    private ScaledCoordinates? _coordinates;
     private EngineProgress _progress = new();
     private string _gameTitle = string.Empty;
     private bool _startupRecoveryPending = true;
@@ -220,6 +220,13 @@ public sealed class AntiAfkEngine
 
             if (_progress.Phase == EnginePhase.BackgroundCategoryClick)
             {
+                if (_coordinates == null)
+                {
+                    _logger.Error("Coordinates not initialized for background click");
+                    await DelaySeconds(1, cancellationToken);
+                    continue;
+                }
+
                 var available = Enumerable.Range(0, _coordinates.Buttons.Count)
                     .Where(i => i != _progress.LastButtonIndex)
                     .ToArray();
@@ -245,6 +252,13 @@ public sealed class AntiAfkEngine
             }
             else if (_progress.Phase == EnginePhase.BackgroundAdClick)
             {
+                if (_coordinates == null)
+                {
+                    _logger.Error("Coordinates not initialized for ad click");
+                    await DelaySeconds(1, cancellationToken);
+                    continue;
+                }
+
                 var adX = _random.Next(_coordinates.AdZoneX1, _coordinates.AdZoneX2 + 1);
                 var adY = _random.Next(_coordinates.AdZoneY1, _coordinates.AdZoneY2 + 1);
                 _logger.Info($"[Background] Ad click at ({adX}, {adY})");

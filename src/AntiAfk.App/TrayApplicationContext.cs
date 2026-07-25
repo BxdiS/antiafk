@@ -46,7 +46,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _configService = configService;
         _logger = logger;
         _logConsole = logConsole;
-        _uiContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         _localization.SetLanguage(_configService.Current.Language);
 
