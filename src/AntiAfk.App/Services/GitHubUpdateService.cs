@@ -8,7 +8,8 @@ namespace AntiAfk.App.Services;
 
 public sealed class GitHubUpdateService : IUpdateService
 {
-    private readonly HttpClient _http = CreateHttpClient();
+    private static readonly HttpClient HttpClient = CreateHttpClient();
+
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
@@ -133,7 +134,7 @@ public sealed class GitHubUpdateService : IUpdateService
         {
             var settings = _configService.Current.Update;
             var url = $"https://api.github.com/repos/{settings.GitHubOwner}/{settings.GitHubRepo}/releases/latest";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await HttpClient.GetAsync(url, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warning($"Update check failed: HTTP {(int)response.StatusCode}");
@@ -179,7 +180,7 @@ public sealed class GitHubUpdateService : IUpdateService
             var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
 
             await using (var fileStream = File.Create(exePath))
-            await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+            await using (var downloadStream = await HttpClient.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
             {
                 await downloadStream.CopyToAsync(fileStream, cancellationToken);
             }
@@ -240,6 +241,5 @@ public sealed class GitHubUpdateService : IUpdateService
     public void Dispose()
     {
         _timer?.Dispose();
-        _http.Dispose();
     }
 }
