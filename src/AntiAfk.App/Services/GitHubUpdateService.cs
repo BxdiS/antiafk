@@ -9,7 +9,8 @@ namespace AntiAfk.App.Services;
 
 public sealed class GitHubUpdateService : IUpdateService
 {
-    private readonly HttpClient _http = CreateHttpClient();
+    private static readonly HttpClient HttpClient = CreateHttpClient();
+
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
@@ -61,8 +62,13 @@ public sealed class GitHubUpdateService : IUpdateService
         }
 
         var currentExePath = Environment.ProcessPath;
-        var tempDir = _downloadedTempDir;
-        var newExePath = _downloadedExePath;
+        string? tempDir;
+        string? newExePath;
+        lock (_sync)
+        {
+            tempDir = _downloadedTempDir;
+            newExePath = _downloadedExePath;
+        }
 
         _logger.Info($"Applying update, swapping into: {currentExePath}");
 
@@ -134,7 +140,7 @@ public sealed class GitHubUpdateService : IUpdateService
         {
             var settings = _configService.Current.Update;
             var url = $"https://api.github.com/repos/{settings.GitHubOwner}/{settings.GitHubRepo}/releases/latest";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await HttpClient.GetAsync(url, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warning($"Update check failed: HTTP {(int)response.StatusCode}");
@@ -180,27 +186,41 @@ public sealed class GitHubUpdateService : IUpdateService
             var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
 
             await using (var fileStream = File.Create(exePath))
-            await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+            await using (var downloadStream = await HttpClient.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
             {
-                await downloadStream.CopyToAsync(fileStream, cancellationToken);
-            }
+                Directory.CreateDirectory(tempDir);
+                var exePath = Path.Combine(tempDir, UpdateConstants.ExeAssetName);
 
-            if (new FileInfo(exePath).Length == 0)
+                await using (var fileStream = File.Create(exePath))
+                await using (var downloadStream = await _http.GetStreamAsync(asset.BrowserDownloadUrl, cancellationToken))
+                {
+                    await downloadStream.CopyToAsync(fileStream, cancellationToken);
+                }
+
+                if (new FileInfo(exePath).Length == 0)
+                {
+                    _logger.Error("Downloaded update file is empty.");
+                    SetAvailability(UpdateAvailability.None);
+                    return;
+                }
+
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
+
+                SetAvailability(UpdateAvailability.Ready);
+                _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
+            }
+            catch (Exception ex)
             {
-                _logger.Error("Downloaded update file is empty.");
-                Directory.Delete(tempDir, true);
+                _logger.Error($"Failed to download update {remoteVersion}.", ex);
                 SetAvailability(UpdateAvailability.None);
-                return;
             }
 
-            if (!await VerifyDownloadedFileAsync(exePath, asset.BrowserDownloadUrl, cancellationToken))
+            lock (_sync)
             {
-                _logger.Warning("Downloaded file verification failed.");
-                return;
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
             }
-
-            _downloadedExePath = exePath;
-            _downloadedTempDir = tempDir;
 
             SetAvailability(UpdateAvailability.Ready);
             _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
@@ -283,6 +303,5 @@ public sealed class GitHubUpdateService : IUpdateService
     public void Dispose()
     {
         _timer?.Dispose();
-        _http.Dispose();
     }
 }
