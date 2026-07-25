@@ -61,8 +61,13 @@ public sealed class GitHubUpdateService : IUpdateService
         }
 
         var currentExePath = Environment.ProcessPath;
-        var tempDir = _downloadedTempDir;
-        var newExePath = _downloadedExePath;
+        string? tempDir;
+        string? newExePath;
+        lock (_sync)
+        {
+            tempDir = _downloadedTempDir;
+            newExePath = _downloadedExePath;
+        }
 
         _logger.Info($"Applying update, swapping into: {currentExePath}");
 
@@ -193,8 +198,11 @@ public sealed class GitHubUpdateService : IUpdateService
                 return;
             }
 
-            _downloadedExePath = exePath;
-            _downloadedTempDir = tempDir;
+            lock (_sync)
+            {
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
+            }
 
             SetAvailability(UpdateAvailability.Ready);
             _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");
