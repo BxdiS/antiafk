@@ -33,6 +33,13 @@ public static class TrayIconFactory
 
         var handle = bitmap.GetHicon();
         var icon = Icon.FromHandle(handle);
-        return (Icon)icon.Clone();
+        try
+        {
+            return (Icon)icon.Clone();
+        }
+        finally
+        {
+            icon.Dispose();
+        }
     }
 }
