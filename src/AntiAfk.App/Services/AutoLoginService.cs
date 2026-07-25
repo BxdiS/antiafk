@@ -3,7 +3,7 @@ using AntiAfk.Core.Abstractions;
 
 namespace AntiAfk.App.Services;
 
-public sealed class AutoLoginService
+public sealed class AutoLoginService : IAutoLoginService
 {
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;

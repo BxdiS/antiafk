@@ -14,6 +14,7 @@ public sealed class AntiAfkEngine
     private readonly IConfigService _configService;
     private readonly IAppLogger _logger;
     private readonly EngineRuntime _runtime;
+    private readonly IAutoLoginService? _autoLoginService;
     private readonly Random _random = new();
 
     private IntPtr _gameHandle;
@@ -37,7 +38,8 @@ public sealed class AntiAfkEngine
         IGameLauncher gameLauncher,
         IConfigService configService,
         IAppLogger logger,
-        EngineRuntime runtime)
+        EngineRuntime runtime,
+        IAutoLoginService? autoLoginService = null)
     {
         _windowService = windowService;
         _inputService = inputService;
@@ -46,6 +48,7 @@ public sealed class AntiAfkEngine
         _configService = configService;
         _logger = logger;
         _runtime = runtime;
+        _autoLoginService = autoLoginService;
     }
 
     public void LoadProgress(EngineProgress progress)
@@ -136,6 +139,31 @@ public sealed class AntiAfkEngine
             _logger.Warning("Failed to launch game launcher.");
             await DelaySeconds(10, cancellationToken);
             return false;
+        }
+
+        // Fire and forget auto-login sequence (does not block game window detection)
+        if (_autoLoginService is not null)
+        {
+            _logger.Info("Starting auto-login sequence in background...");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _autoLoginService.AutoLoginAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Warning("Auto-login was cancelled");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("Auto-login task failed", ex);
+                }
+            }, cancellationToken);
+        }
+        else
+        {
+            _logger.Warning("AutoLoginService is not configured - login button will not be clicked automatically");
         }
 
         for (var attempt = 0; attempt < 60 && !cancellationToken.IsCancellationRequested; attempt++)

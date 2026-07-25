@@ -79,6 +79,7 @@ internal static class Program
                     runtime,
                     () => configService.Current.Timings);
                 var gameLauncher = new GameLauncherService(configService, logger);
+                var autoLoginService = new AutoLoginService(logger, screenCapture, inputService);
                 var progressStore = new EngineProgressStore();
 
                 var engine = new AntiAfkEngine(
@@ -88,7 +89,8 @@ internal static class Program
                     gameLauncher,
                     configService,
                     logger,
-                    runtime);
+                    runtime,
+                    autoLoginService);
 
                 var engineHost = new EngineHostService(engine, progressStore, windowService, logger, localization);
                 var updateService = new GitHubUpdateService(configService, logger);
