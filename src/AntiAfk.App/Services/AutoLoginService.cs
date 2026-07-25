@@ -10,6 +10,13 @@ public sealed class AutoLoginService : IAutoLoginService
     private const int ServerPixelY = 216;
     private const uint ServerPixelColor = 0xff007e;
 
+    // Character-select screen indicator (approx. e81c5a). If this is already visible when
+    // AutoLoginAsync starts, we're past the launcher and GTA5 is already running - the user
+    // may have started the script from this point rather than from the launcher.
+    private const int CharacterSelectPixelX = 1870;
+    private const int CharacterSelectPixelY = 52;
+    private const uint CharacterSelectPixelColor = 0xe81c5a;
+
     // Launcher login button
     private const int LoginButtonX = 950;
     private const int LoginButtonY = 487;
@@ -34,11 +41,21 @@ public sealed class AutoLoginService : IAutoLoginService
             // Note: the launcher is already started by the engine (GameLauncherService)
             // before this sequence runs, so we do NOT launch it again here.
 
-            // Step 1: Wait for launcher UI, then click the login button
-            await ClickMajesticLoginAsync(cancellationToken);
+            // Step 0: Check if we're already on the character-select screen. This covers the
+            // case where the script is started mid-flow (e.g. the user already logged in via
+            // the launcher manually) - in that case, skip the launcher click and GTA5 wait.
+            if (IsPixelColor(CharacterSelectPixelX, CharacterSelectPixelY, CharacterSelectPixelColor, tolerance: 40))
+            {
+                _logger.Info("Character-select screen already detected - skipping launcher login and GTA5 wait");
+            }
+            else
+            {
+                // Step 1: Wait for launcher UI, then click the login button
+                await ClickMajesticLoginAsync(cancellationToken);
 
-            // Step 2: Wait for GTA5.exe process to start
-            await WaitForGTA5Async(cancellationToken);
+                // Step 2: Wait for GTA5.exe process to start
+                await WaitForGTA5Async(cancellationToken);
+            }
 
             // Step 3: Wait until the server-connected / character-select screen appears
             var reached = await WaitForServerConnectionAsync(cancellationToken);
