@@ -5,6 +5,21 @@ namespace AntiAfk.Infrastructure.Services;
 
 public sealed class InputService : IInputService
 {
+    // Virtual keys that live on the extended part of the keyboard. They share a scan code with a
+    // numpad key, so without KEYEVENTF_EXTENDEDKEY the target sees the numpad key instead: VK_DOWN
+    // maps to scan code 0x50, which is Numpad 2. Games reading raw scan codes (GTA V does) act on
+    // the wrong key.
+    private static readonly HashSet<ushort> ExtendedKeys =
+    [
+        0x21, 0x22, 0x23, 0x24, // PageUp, PageDown, End, Home
+        0x25, 0x26, 0x27, 0x28, // Left, Up, Right, Down
+        0x2D, 0x2E,             // Insert, Delete
+        0x2C,                   // PrintScreen
+        0x90,                   // NumLock
+        0x6F,                   // Divide
+        0xA3, 0xA5              // Right Ctrl, Right Alt
+    ];
+
     private readonly IWindowService _windowService;
     private readonly Random _random = new();
 
@@ -16,9 +31,11 @@ public sealed class InputService : IInputService
     public void SendKey(ushort virtualKey, double durationSeconds)
     {
         var scanCode = (byte)NativeMethods.MapVirtualKey(virtualKey, 0);
-        NativeMethods.keybd_event((byte)virtualKey, scanCode, 0, UIntPtr.Zero);
+        var extended = ExtendedKeys.Contains(virtualKey) ? NativeMethods.KeyeventfExtendedkey : 0u;
+
+        NativeMethods.keybd_event((byte)virtualKey, scanCode, extended, UIntPtr.Zero);
         Thread.Sleep(TimeSpan.FromSeconds(durationSeconds));
-        NativeMethods.keybd_event((byte)virtualKey, scanCode, NativeMethods.KeyeventfKeyup, UIntPtr.Zero);
+        NativeMethods.keybd_event((byte)virtualKey, scanCode, extended | NativeMethods.KeyeventfKeyup, UIntPtr.Zero);
     }
 
     public void SendKeyToGame(IntPtr gameHandle, ushort virtualKey, double durationSeconds)

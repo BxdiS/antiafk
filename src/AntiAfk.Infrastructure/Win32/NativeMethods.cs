@@ -12,6 +12,7 @@ internal static class NativeMethods
     public const uint SwpNomove = 0x0002;
     public const uint SwpNosize = 0x0001;
     public const uint SwpShowwindow = 0x0040;
+    public const uint KeyeventfExtendedkey = 0x0001;
     public const uint KeyeventfKeyup = 0x0002;
     public const int WmMousemove = 0x0200;
     public const int WmLbuttondown = 0x0201;
