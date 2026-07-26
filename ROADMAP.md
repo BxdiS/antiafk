@@ -1,141 +1,56 @@
-# Roadmap — AntiAFK Development
+# Roadmap — AntiAFK
 
-Development priorities and planned features for upcoming releases.
-
----
-
-## v1.2.0 — Smart Behavior
-
-**Focus:** Anti-detection and adaptive gameplay
-
-- [ ] **Adaptive clicks** — Detect AFK check timeouts and adjust click frequency
-- [ ] **Smart category selection** — Randomize category choices instead of always clicking the same one
-- [ ] **Random pauses** — Human-like behavior with unpredictable delays between actions
-- [ ] **Play detection** — Disable bot when player takes manual control for extended period
-- [ ] **Crash recovery** — Automatically restart game if it freezes/crashes
-- [ ] **Healthcheck** — Periodic verification that all systems are functioning
-
-**Release target:** 2-3 months
+Planned features and improvements.
 
 ---
 
-## v1.3.0 — Multi-Platform Support
+## v1.2.0 — Smart Behavior & Anti-Detection
 
-**Focus:** Broader game compatibility and resolution handling
-
-- [ ] **Multi-resolution support** — Support resolutions beyond 16:9 (4:3, 21:9, ultrawide)
-- [ ] **Multi-server support** — Detect and support other GTA RP servers with marketplace
-- [ ] **Dark mode** — System theme integration (auto-sync with Windows settings)
-- [ ] **Keyboard shortcuts** — Quick enable/disable (Win+A or customizable)
-- [ ] **Mute audio** — Option to disable sound notifications
-
-**Release target:** 1-2 months
+- [ ] Adaptive clicks — Detect AFK check timeouts and adjust click frequency accordingly
+- [ ] Smart category selection — Randomize category choices instead of clicking the same one
+- [ ] Random pauses — Human-like behavior with unpredictable delays
+- [ ] Play detection — Auto-disable when player takes manual control for extended period
+- [ ] Game crash detection — Automatically restart game if it freezes or crashes
 
 ---
 
-## v1.4.0 — Notifications & Control
+## v1.3.0 — Stability & Performance
 
-**Focus:** Better monitoring and remote management
+- [ ] Memory optimization — Reduce RAM footprint
+- [ ] Auto-recovery — Restart application if it crashes
+- [ ] Anti-crash system — Comprehensive exception handling, never crash
+- [ ] Healthcheck — Periodic verification all systems are working
 
-- [ ] **Telegram bot expansion:**
+---
+
+## v1.4.0 — Notifications & Alerts
+
+- [ ] Telegram bot expansion:
   - Error notifications
-  - Periodic status reports (hourly/daily)
-  - Remote commands (start/stop/status via Telegram)
+  - Periodic status reports
+  - Remote commands (start/stop/status)
   - Daily activity graph
-- [ ] **Discord webhook** — Log events to personal Discord server
-- [ ] **Windows notifications** — Native taskbar alerts
-- [ ] **Sound alerts** — Audio cues for critical events
-- [ ] **Donation reminder** — Coffee ☕ support button in app
-
-**Release target:** 1-2 months
+- [ ] Discord webhook — Log events to Discord
+- [ ] Windows notifications — Native taskbar alerts
+- [ ] Sound alerts — Audio cues for events
+- [ ] Donation reminder — Coffee ☕ support button
 
 ---
 
-## v1.5.0 — Optimization & Stability
+## v1.5.0 — Platform & UI
 
-**Focus:** Performance and reliability
-
-- [ ] **Memory optimization** — Reduce RAM footprint
-- [ ] **Anti-crash system** — Comprehensive exception handling
-- [ ] **Auto-recovery** — Restart app if it crashes
-- [ ] **Multi-language support** — RU, EN, DE, FR, ES, PT, PL
-- [ ] **Configuration backup** — Cloud sync for settings (future-ready)
-
-**Release target:** 2 months
+- [ ] Multi-resolution support — Beyond 16:9 (4:3, 21:9, ultrawide, etc.)
+- [ ] Multi-server support — Support other GTA RP servers with marketplace
+- [ ] Dark mode — System theme integration with Windows
+- [ ] Keyboard shortcuts — Quick enable/disable (customizable hotkeys)
+- [ ] Multi-language support — RU, EN, DE, FR, ES, PT, PL
 
 ---
 
-## v2.0.0 — Advanced Features
+## v4.0.0 — Advanced (Long-term exploration)
 
-**Focus:** Customization and extensibility
-
-- [ ] **Custom scripts** — Users write their own behavior patterns
-- [ ] **REST API** — External apps can control/monitor the bot
-- [ ] **Plugin system** — Third-party extensions
-- [ ] **Behavior profiles** — Casual / Aggressive / Stealth modes
-- [ ] **Advanced analytics** — Statistics dashboard, export to CSV/JSON
-- [ ] **Marketplace trends** — Track what sells, category popularity analysis
-
-**Release target:** 4-6 months
-
----
-
-## v3.0.0 — Ecosystem
-
-**Focus:** Community and ecosystem expansion
-
-- [ ] **Web dashboard** — Manage bot from browser on any device
-- [ ] **Mobile app** — Android/iOS companion for notifications
-- [ ] **Leaderboard** — Anonymous earnings tracking (opt-in)
-- [ ] **Community config sharing** — Share/download behavior profiles
-- [ ] **OBS integration** — Auto-pause if streaming detected
-- [ ] **Scheduled tasks** — Time-based enable/disable, account rotation
-
-**Release target:** 6-12 months
-
----
-
-## v4.0.0 — Future Exploration
-
-**Focus:** Long-term, experimental features
-
-- [ ] **Multi-account automation** — Rotate between characters automatically
-- [ ] **AI-driven behavior** — Machine learning for adaptive gameplay
-- [ ] **Premium tier** — Advanced features subscription (optional)
-- [ ] **Marketplace bot** — Auto-list items, price optimization
-- [ ] **Cross-platform** — Wine support for Linux (if viable)
-- [ ] **VPN/Proxy integration** — Route through VPN for added privacy
-
-**Release target:** 12+ months (highly speculative)
-
----
-
-## Current Status (v1.1.8)
-
-✅ **Implemented:**
-- Core AFK prevention (marketplace clicks, walking, turning)
-- Auto-login system (character selection, spawn point)
-- Portable single-file executable
-- Tray icon with status indicators
-- Auto-updates via GitHub releases
-- SLSA build provenance (signed binaries)
-- System theme support (basic)
-- Log console with real-time events
-- Settings panel
-
----
-
-## Legend
-
-- **[ ]** — Not started
-- **[/]** — In progress
-- **[x]** — Complete
-
----
-
-## Contributing
-
-Want to help? Check out [GUIDE.md](docs/GUIDE.md) for building from source and contribution guidelines.
+- [ ] Custom scripts — Users write their own behavior patterns
+- [ ] API — External applications can manage and monitor the bot
 
 ---
 
