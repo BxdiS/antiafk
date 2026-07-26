@@ -20,10 +20,47 @@ internal static class NativeMethods
     public const int MkLbutton = 0x0001;
     public const uint GwHwndPrev = 3;
 
-    // mouse_event flags. Sent without MOUSEEVENTF_MOVE/ABSOLUTE, so the button event applies at
-    // wherever the cursor currently is - which is why the cursor must be held still around a click.
+    public const uint MouseeventfMove = 0x0001;
     public const uint MouseeventfLeftdown = 0x0002;
     public const uint MouseeventfLeftup = 0x0004;
+
+    // Carrying ABSOLUTE|VIRTUALDESK coordinates inside the button event itself pins the click to a
+    // point instead of "wherever the cursor is when this gets processed". VIRTUALDESK makes the
+    // normalised coordinates span the whole virtual desktop rather than just the primary monitor.
+    public const uint MouseeventfAbsolute = 0x8000;
+    public const uint MouseeventfVirtualdesk = 0x4000;
+
+    public const uint InputMouse = 0;
+
+    // Virtual-desktop metrics, needed to normalise screen pixels to the 0..65535 absolute range.
+    public const int SmXvirtualscreen = 76;
+    public const int SmYvirtualscreen = 77;
+    public const int SmCxvirtualscreen = 78;
+    public const int SmCyvirtualscreen = 79;
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MouseInput
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Input
+    {
+        public uint type;
+        public MouseInput mi;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, [In] Input[] pInputs, int cbSize);
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 

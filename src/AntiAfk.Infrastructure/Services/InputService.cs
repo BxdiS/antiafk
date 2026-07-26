@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Infrastructure.Win32;
 
@@ -112,9 +113,14 @@ public sealed class InputService : IInputService
         {
             MoveCursorTo(screenX, screenY);
 
-            NativeMethods.mouse_event(NativeMethods.MouseeventfLeftdown, 0, 0, 0, UIntPtr.Zero);
+            // The press and release carry their own absolute coordinates. Previously they were bare
+            // button events applied at "wherever the cursor is now", so anything that moved the
+            // cursor between the move and the click - or the target reading the position a frame
+            // late - silently redirected the click to a different button. Now the point is part of
+            // the event, so a click can only ever register where it was aimed.
+            SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfLeftdown);
             Thread.Sleep(TimeSpan.FromMilliseconds(_random.Next(90, 141)));
-            NativeMethods.mouse_event(NativeMethods.MouseeventfLeftup, 0, 0, 0, UIntPtr.Zero);
+            SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfLeftup);
 
             // Keep the cursor where it is until the target has had a chance to act on the click.
             // MoveCursorTo tops this up if the next move comes sooner than the full hold.
@@ -153,8 +159,47 @@ public sealed class InputService : IInputService
             Thread.Sleep(PostClickCursorHold - sinceLastClick);
         }
 
-        System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
+        // A real move event rather than SetCursorPos: it travels through the same input queue as
+        // the click that follows, so a target watching the input stream registers the hover first.
+        SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfMove);
         Thread.Sleep(CursorArrivalSettle);
+    }
+
+    private static void SendAbsoluteMouse(int screenX, int screenY, uint buttonFlags)
+    {
+        var (normalisedX, normalisedY) = ToVirtualDesktopAbsolute(screenX, screenY);
+
+        var input = new NativeMethods.Input
+        {
+            type = NativeMethods.InputMouse,
+            mi = new NativeMethods.MouseInput
+            {
+                dx = normalisedX,
+                dy = normalisedY,
+                dwFlags = NativeMethods.MouseeventfMove
+                    | NativeMethods.MouseeventfAbsolute
+                    | NativeMethods.MouseeventfVirtualdesk
+                    | buttonFlags
+            }
+        };
+
+        NativeMethods.SendInput(1, [input], Marshal.SizeOf<NativeMethods.Input>());
+    }
+
+    // Absolute mouse input is normalised to 0..65535 across the whole virtual desktop, so a second
+    // monitor - including one positioned left of or above the primary, which makes the origin
+    // negative - is handled by subtracting the virtual origin rather than assuming (0,0).
+    private static (int X, int Y) ToVirtualDesktopAbsolute(int screenX, int screenY)
+    {
+        var originX = NativeMethods.GetSystemMetrics(NativeMethods.SmXvirtualscreen);
+        var originY = NativeMethods.GetSystemMetrics(NativeMethods.SmYvirtualscreen);
+        var width = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SmCxvirtualscreen) - 1);
+        var height = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SmCyvirtualscreen) - 1);
+
+        var normalisedX = (int)Math.Round((screenX - originX) * 65535.0 / width);
+        var normalisedY = (int)Math.Round((screenY - originY) * 65535.0 / height);
+
+        return (Math.Clamp(normalisedX, 0, 65535), Math.Clamp(normalisedY, 0, 65535));
     }
 
     private static void SendMouseMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam)
