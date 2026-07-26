@@ -24,11 +24,16 @@ internal static class NativeMethods
     public const uint MouseeventfLeftdown = 0x0002;
     public const uint MouseeventfLeftup = 0x0004;
 
-    // Carrying ABSOLUTE|VIRTUALDESK coordinates inside the button event itself pins the click to a
-    // point instead of "wherever the cursor is when this gets processed". VIRTUALDESK makes the
-    // normalised coordinates span the whole virtual desktop rather than just the primary monitor.
     public const uint MouseeventfAbsolute = 0x8000;
+
+    // "Maps coordinates to the entire desktop. Must be used with MOUSEEVENTF_ABSOLUTE." Without it
+    // normalised coordinates map to the primary monitor only.
     public const uint MouseeventfVirtualdesk = 0x4000;
+
+    // "The WM_MOUSEMOVE messages will not be coalesced. The default behavior is to coalesce
+    // WM_MOUSEMOVE messages." Coalescing is why a move must never share an event with a button
+    // flag: the merged event can be delivered with a later move's position.
+    public const uint MouseeventfMoveNocoalesce = 0x2000;
 
     public const uint InputMouse = 0;
 

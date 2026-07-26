@@ -107,12 +107,16 @@ public sealed class InputService : IInputService
             var timings = _timingsProvider();
             MoveCursorTo(screenX, screenY, timings);
 
-            // The press and release carry their own absolute coordinates, so a click can only
-            // register where it was aimed even if something moves the cursor.
+            // Press and release are their own events, carrying no movement. Windows coalesces
+            // WM_MOUSEMOVE by default, so an event that is both a move and a button change can be
+            // merged with a later move and delivered at that move's position - the button then
+            // appears to be held and only released once the cursor sets off for the next target.
+            // Button flags signal a state change and apply wherever the cursor already is, which is
+            // the point MoveCursorTo has just parked it on.
             var cursorAtPress = System.Windows.Forms.Cursor.Position;
-            SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfLeftdown);
+            SendButton(NativeMethods.MouseeventfLeftdown);
             Thread.Sleep(TimeSpan.FromSeconds(timings.ClickHoldDuration));
-            SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfLeftup);
+            SendButton(NativeMethods.MouseeventfLeftup);
             var cursorAtRelease = System.Windows.Forms.Cursor.Position;
 
             // Reports where the cursor actually was around the press. If a click still lands on the
@@ -170,11 +174,13 @@ public sealed class InputService : IInputService
 
         // A real move event rather than SetCursorPos: it travels through the same input queue as
         // the click that follows, so a target watching the input stream registers the hover first.
-        SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfMove);
+        MoveAbsolute(screenX, screenY);
         Thread.Sleep(TimeSpan.FromSeconds(timings.CursorArrivalSettle));
     }
 
-    private static void SendAbsoluteMouse(int screenX, int screenY, uint buttonFlags)
+    // Movement only. NOCOALESCE keeps this from being merged with any other move, so the cursor is
+    // demonstrably at the target before the button events follow.
+    private static void MoveAbsolute(int screenX, int screenY)
     {
         var (normalisedX, normalisedY) = ToVirtualDesktopAbsolute(screenX, screenY);
 
@@ -188,8 +194,20 @@ public sealed class InputService : IInputService
                 dwFlags = NativeMethods.MouseeventfMove
                     | NativeMethods.MouseeventfAbsolute
                     | NativeMethods.MouseeventfVirtualdesk
-                    | buttonFlags
+                    | NativeMethods.MouseeventfMoveNocoalesce
             }
+        };
+
+        NativeMethods.SendInput(1, [input], Marshal.SizeOf<NativeMethods.Input>());
+    }
+
+    // Button state change only - no movement flag, so this cannot be coalesced into a move.
+    private static void SendButton(uint buttonFlag)
+    {
+        var input = new NativeMethods.Input
+        {
+            type = NativeMethods.InputMouse,
+            mi = new NativeMethods.MouseInput { dwFlags = buttonFlag }
         };
 
         NativeMethods.SendInput(1, [input], Marshal.SizeOf<NativeMethods.Input>());
