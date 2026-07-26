@@ -105,6 +105,10 @@ internal static class Program
 
                 logger.Info($"{AppBranding.DisplayName} started.");
 
+                // Logged up front because every coordinate below depends on it: a display that is
+                // not at 100% scale is the first thing to check when clicks land in the wrong place.
+                DisplayDiagnostics.LogDisplayLayout(logger);
+
                 return new TrayApplicationContext(engineHost, updateService, localization, configService, logger, logConsole);
             }
             catch (Exception ex)
