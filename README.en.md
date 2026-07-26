@@ -59,7 +59,7 @@ See [docs/GUIDE.md](docs/GUIDE.md) for:
 
 - **Open source** — Full source code available
 - **No telemetry** — All settings stored in memory only
-- **Safe** — No malware, no unwanted modifications
+- **Safe** — No malware, no unwanted system modifications
 
 GPL-3.0 terms: [LICENSE](LICENSE)
 
