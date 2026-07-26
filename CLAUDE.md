@@ -27,6 +27,19 @@ Only `main` should survive long-term.
 
 Code compiles without warnings. Tests pass. No obvious crashes. Style matches whatever the surrounding file is already doing.
 
+## Documentation
+
+When behavior changes, update the relevant docs:
+- **GUIDE.md** and **GUIDE.en.md** — user-facing setup, tray menu, troubleshooting
+- **ROADMAP.md** — for feature additions or major changes in direction
+- **README.md** and **README.en.md** — if something about what the app does or how to get it changes
+
+This file (CLAUDE.md) itself should stay current if the workflow changes.
+
+## Configuration
+
+**config.example.json** is a reference for what config fields exist and what they do. If you add or remove fields, update this file so it stays in sync with the actual code.
+
 ## Tooling
 
 Needs `git` and `gh` on PATH, with `gh` authenticated (`gh auth login`, or a `GITHUB_TOKEN` in the environment). If something's missing, say so instead of working around it.

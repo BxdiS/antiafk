@@ -45,6 +45,7 @@ The Telegram bot exists but barely does anything yet.
 - [ ] Follow the Windows light/dark setting
 - [ ] Global hotkeys for start/stop, rebindable
 - [ ] More interface languages: DE, FR, ES, PT, PL alongside RU and EN
+- [ ] Optional config file next to `.exe` for power users — if `AntiAFK.json` exists in the same folder, load it instead of asking (no telemetry, just letting people avoid the settings dialog on every startup)
 
 ## v2.0.0 — GTA5RP
 
