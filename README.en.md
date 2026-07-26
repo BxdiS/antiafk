@@ -4,6 +4,8 @@
 
 Keeps your character active so the server doesn't kick you for being idle.
 
+Built for **Majestic RP**, which it supports today. **GTA5RP** is coming in 2.0.0 — see the [roadmap](ROADMAP.md).
+
 ## Download
 
 Grab the latest build from [Releases](https://github.com/BxdiS/antiafk/releases) — you only need `AntiAFK.exe`.
