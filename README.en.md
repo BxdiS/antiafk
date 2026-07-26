@@ -33,6 +33,8 @@ The tray menu has settings, a live log, version info, an update button when ther
 
 Windows 10 or 11, x64. The game needs to be in borderless windowed mode at a 16:9 resolution. Other aspect ratios aren't supported yet — that's [on the roadmap](ROADMAP.md).
 
+Display scaling needs to be 100%. Click coordinates are real pixels, so anything else shifts them.
+
 ## More detail
 
 [docs/GUIDE.md](docs/GUIDE.md) covers building from source, configuration, how auto-updates work, and the code signing situation.
