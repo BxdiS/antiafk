@@ -20,8 +20,24 @@ public sealed class InputService : IInputService
         0xA3, 0xA5              // Right Ctrl, Right Alt
     ];
 
+    // A click is delivered at wherever the cursor happens to be when the target processes it, not
+    // where it was when the click was injected. On a heavy screen such as character select a frame
+    // can take longer than the pause that used to follow a click, so if the cursor had already set
+    // off towards the next button the press was credited to that button instead: click A, register
+    // B. The cursor therefore stays put for this long after every click, and - because callers
+    // cannot be relied on to remember - the wait is enforced at the point the cursor moves.
+    private static readonly TimeSpan PostClickCursorHold = TimeSpan.FromMilliseconds(700);
+
+    // Time for the cursor to physically arrive and for the element under it to register the hover
+    // before the button goes down.
+    private static readonly TimeSpan CursorArrivalSettle = TimeSpan.FromMilliseconds(300);
+
+    // Time for a window to actually come to the front and take input focus after being raised.
+    private static readonly TimeSpan ForegroundSettle = TimeSpan.FromMilliseconds(300);
+
     private readonly IWindowService _windowService;
     private readonly Random _random = new();
+    private DateTime _lastClickFinishedUtc = DateTime.MinValue;
 
     public InputService(IWindowService windowService)
     {
@@ -94,24 +110,16 @@ public sealed class InputService : IInputService
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Setting cursor position to ({screenX}, {screenY})");
-            System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
+            MoveCursorTo(screenX, screenY);
 
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Cursor set, waiting 300ms for mouse to settle");
-            Thread.Sleep(300); // Increased from 30ms to ensure cursor has time to physically move
+            NativeMethods.mouse_event(NativeMethods.MouseeventfLeftdown, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(TimeSpan.FromMilliseconds(_random.Next(90, 141)));
+            NativeMethods.mouse_event(NativeMethods.MouseeventfLeftup, 0, 0, 0, UIntPtr.Zero);
 
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTDOWN");
-            NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Waiting 100ms between down and up");
-            Thread.Sleep(100); // Increased from 80ms for more natural click duration
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTUP");
-            NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Click complete, waiting 200ms before next action");
-            Thread.Sleep(200); // Added delay after click completes to prevent rapid re-positioning
-
+            // Keep the cursor where it is until the target has had a chance to act on the click.
+            // MoveCursorTo tops this up if the next move comes sooner than the full hold.
+            _lastClickFinishedUtc = DateTime.UtcNow;
+            Thread.Sleep(PostClickCursorHold);
         }
         catch (Exception ex)
         {
@@ -120,14 +128,33 @@ public sealed class InputService : IInputService
         }
     }
 
-    public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY)
+    public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY) =>
+        ClickScreenOnWindow(gameHandle, screenX, screenY);
+
+    public void ClickScreenOnWindow(IntPtr windowHandle, int screenX, int screenY)
     {
-        _windowService.ForceForeground(gameHandle);
-        // 300 ms after focus change: on lower-end machines the game window needs longer to
-        // regain input focus than the previous 150 ms allowed, so the first click/keystroke
-        // sometimes landed on the previously focused window instead.
-        Thread.Sleep(300);
+        // Whatever we are about to click has to be the window actually receiving input, otherwise
+        // the press goes to whichever window happens to be on top at that moment.
+        _windowService.ForceForeground(windowHandle);
+
+        // On lower-end machines the window needs a moment to regain input focus; without this the
+        // first click landed on the previously focused window instead.
+        Thread.Sleep(ForegroundSettle);
         ClickScreen(screenX, screenY);
+    }
+
+    // Single choke point for cursor movement, so the post-click hold cannot be skipped by a caller
+    // that clicks and then immediately asks for the next position.
+    private void MoveCursorTo(int screenX, int screenY)
+    {
+        var sinceLastClick = DateTime.UtcNow - _lastClickFinishedUtc;
+        if (sinceLastClick < PostClickCursorHold)
+        {
+            Thread.Sleep(PostClickCursorHold - sinceLastClick);
+        }
+
+        System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
+        Thread.Sleep(CursorArrivalSettle);
     }
 
     private static void SendMouseMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam)

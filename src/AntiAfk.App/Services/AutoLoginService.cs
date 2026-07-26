@@ -153,6 +153,35 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
+    // Uses the same game-window lookup as the engine, which matches on the client's title rather
+    // than trusting MainWindowHandle.
+    private void ClickOnGame(int screenX, int screenY) =>
+        ClickOnWindow(_windowService.FindGameWindow()?.Handle ?? IntPtr.Zero, "game", screenX, screenY);
+
+    private void ClickOnLauncher(int screenX, int screenY) =>
+        ClickOnWindow(
+            _windowService.FindMainWindowByProcess(GameConstants.LauncherProcessName),
+            "launcher",
+            screenX,
+            screenY);
+
+    // Raises the owning window before clicking, so the press cannot be swallowed by whatever else
+    // is in front. Falls back to a bare click when the window cannot be found - a click at the
+    // right coordinates is still better than abandoning the login sequence.
+    private void ClickOnWindow(IntPtr handle, string description, int screenX, int screenY)
+    {
+        if (handle == IntPtr.Zero)
+        {
+            _logger.Warning(
+                $"Auto-login: {description} window not found, clicking without raising it. " +
+                "The press may go to whatever window is in front.");
+            _inputService.ClickScreen(screenX, screenY);
+            return;
+        }
+
+        _inputService.ClickScreenOnWindow(handle, screenX, screenY);
+    }
+
     // The coordinates below are fixed 1080p values, so the single most useful thing a log can say
     // when clicks "go nowhere" is what the screen actually is.
     private void LogScreenGeometry()
@@ -181,7 +210,7 @@ public sealed class AutoLoginService : IAutoLoginService
         }
 
         _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
-        _inputService.ClickScreen(Coords.LoginButton.X, Coords.LoginButton.Y);
+        ClickOnLauncher(Coords.LoginButton.X, Coords.LoginButton.Y);
         await Task.Delay(4000, cancellationToken); // Wait for game process to launch (4s)
     }
 
@@ -264,11 +293,11 @@ public sealed class AutoLoginService : IAutoLoginService
         var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character);
 
         _logger.Info($"Selecting character {character}: click ({selectX},{selectY})");
-        _inputService.ClickScreen(selectX, selectY);
+        ClickOnGame(selectX, selectY);
         await Task.Delay(4000, cancellationToken); // Wait for UI to respond to selection (4s for stability)
 
         _logger.Info($"Confirming character {character}: click ({confirmX},{confirmY})");
-        _inputService.ClickScreen(confirmX, confirmY);
+        ClickOnGame(confirmX, confirmY);
         await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
     }
 
@@ -276,7 +305,7 @@ public sealed class AutoLoginService : IAutoLoginService
     {
         var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
         _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
-        _inputService.ClickScreen(spawnX, spawnY);
+        ClickOnGame(spawnX, spawnY);
         await Task.Delay(4000, cancellationToken); // Wait for spawn confirmation to process (4s for stability)
     }
 

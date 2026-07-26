@@ -20,6 +20,11 @@ internal static class NativeMethods
     public const int MkLbutton = 0x0001;
     public const uint GwHwndPrev = 3;
 
+    // mouse_event flags. Sent without MOUSEEVENTF_MOVE/ABSOLUTE, so the button event applies at
+    // wherever the cursor currently is - which is why the cursor must be held still around a click.
+    public const uint MouseeventfLeftdown = 0x0002;
+    public const uint MouseeventfLeftup = 0x0004;
+
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
