@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Models;
 using AntiAfk.Infrastructure.Win32;
 
 namespace AntiAfk.Infrastructure.Services;
@@ -21,28 +22,20 @@ public sealed class InputService : IInputService
         0xA3, 0xA5              // Right Ctrl, Right Alt
     ];
 
-    // A click is delivered at wherever the cursor happens to be when the target processes it, not
-    // where it was when the click was injected. On a heavy screen such as character select a frame
-    // can take longer than the pause that used to follow a click, so if the cursor had already set
-    // off towards the next button the press was credited to that button instead: click A, register
-    // B. The cursor therefore stays put for this long after every click, and - because callers
-    // cannot be relied on to remember - the wait is enforced at the point the cursor moves.
-    private static readonly TimeSpan PostClickCursorHold = TimeSpan.FromMilliseconds(700);
-
-    // Time for the cursor to physically arrive and for the element under it to register the hover
-    // before the button goes down.
-    private static readonly TimeSpan CursorArrivalSettle = TimeSpan.FromMilliseconds(300);
-
     // Time for a window to actually come to the front and take input focus after being raised.
     private static readonly TimeSpan ForegroundSettle = TimeSpan.FromMilliseconds(300);
 
     private readonly IWindowService _windowService;
+    private readonly IAppLogger _logger;
+    private readonly Func<TimingSettings> _timingsProvider;
     private readonly Random _random = new();
     private DateTime _lastClickFinishedUtc = DateTime.MinValue;
 
-    public InputService(IWindowService windowService)
+    public InputService(IWindowService windowService, IAppLogger logger, Func<TimingSettings> timingsProvider)
     {
         _windowService = windowService;
+        _logger = logger;
+        _timingsProvider = timingsProvider;
     }
 
     public void SendKey(ushort virtualKey, double durationSeconds)
@@ -111,21 +104,36 @@ public sealed class InputService : IInputService
     {
         try
         {
-            MoveCursorTo(screenX, screenY);
+            var timings = _timingsProvider();
+            MoveCursorTo(screenX, screenY, timings);
 
-            // The press and release carry their own absolute coordinates. Previously they were bare
-            // button events applied at "wherever the cursor is now", so anything that moved the
-            // cursor between the move and the click - or the target reading the position a frame
-            // late - silently redirected the click to a different button. Now the point is part of
-            // the event, so a click can only ever register where it was aimed.
+            // The press and release carry their own absolute coordinates, so a click can only
+            // register where it was aimed even if something moves the cursor.
+            var cursorAtPress = System.Windows.Forms.Cursor.Position;
             SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfLeftdown);
-            Thread.Sleep(TimeSpan.FromMilliseconds(_random.Next(90, 141)));
+            Thread.Sleep(TimeSpan.FromSeconds(timings.ClickHoldDuration));
             SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfLeftup);
+            var cursorAtRelease = System.Windows.Forms.Cursor.Position;
+
+            // Reports where the cursor actually was around the press. If a click still lands on the
+            // wrong control while these read the intended point, the cursor is not the cause and
+            // the target is interpreting the input itself.
+            if (cursorAtPress.X != screenX || cursorAtPress.Y != screenY ||
+                cursorAtRelease.X != screenX || cursorAtRelease.Y != screenY)
+            {
+                _logger.Warning(
+                    $"Click ({screenX},{screenY}): cursor was ({cursorAtPress.X},{cursorAtPress.Y}) at press and " +
+                    $"({cursorAtRelease.X},{cursorAtRelease.Y}) at release - something moved it mid-click.");
+            }
+            else
+            {
+                _logger.Info($"Click ({screenX},{screenY}): cursor held on target through press and release.");
+            }
 
             // Keep the cursor where it is until the target has had a chance to act on the click.
             // MoveCursorTo tops this up if the next move comes sooner than the full hold.
             _lastClickFinishedUtc = DateTime.UtcNow;
-            Thread.Sleep(PostClickCursorHold);
+            Thread.Sleep(TimeSpan.FromSeconds(timings.PostClickCursorHold));
         }
         catch (Exception ex)
         {
@@ -151,18 +159,19 @@ public sealed class InputService : IInputService
 
     // Single choke point for cursor movement, so the post-click hold cannot be skipped by a caller
     // that clicks and then immediately asks for the next position.
-    private void MoveCursorTo(int screenX, int screenY)
+    private void MoveCursorTo(int screenX, int screenY, TimingSettings timings)
     {
+        var hold = TimeSpan.FromSeconds(timings.PostClickCursorHold);
         var sinceLastClick = DateTime.UtcNow - _lastClickFinishedUtc;
-        if (sinceLastClick < PostClickCursorHold)
+        if (sinceLastClick < hold)
         {
-            Thread.Sleep(PostClickCursorHold - sinceLastClick);
+            Thread.Sleep(hold - sinceLastClick);
         }
 
         // A real move event rather than SetCursorPos: it travels through the same input queue as
         // the click that follows, so a target watching the input stream registers the hover first.
         SendAbsoluteMouse(screenX, screenY, NativeMethods.MouseeventfMove);
-        Thread.Sleep(CursorArrivalSettle);
+        Thread.Sleep(TimeSpan.FromSeconds(timings.CursorArrivalSettle));
     }
 
     private static void SendAbsoluteMouse(int screenX, int screenY, uint buttonFlags)

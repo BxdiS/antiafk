@@ -39,6 +39,16 @@ public sealed class TimingSettings
     public double PostTurnDelay { get; set; } = 0.5;
     public double PostWalkDelay { get; set; } = 0.2;
 
+    // Cursor is parked on the target for this long before the button goes down, so the target has
+    // registered the hover and nothing is still animating under it.
+    public double CursorArrivalSettle { get; set; } = 5.0;
+
+    // Cursor is not allowed to move again until this long after the button came up.
+    public double PostClickCursorHold { get; set; } = 5.0;
+
+    // How long a press is held before release.
+    public double ClickHoldDuration { get; set; } = 0.12;
+
     public static TimingSettings CreateDefault() => new();
 }
 
