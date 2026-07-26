@@ -67,8 +67,4 @@ GPL-3.0 terms: [LICENSE](LICENSE)
 
 ## 🗺️ Roadmap
 
-- [ ] Windows autostart
-- [ ] Auto-launch game on click
-- [ ] Telegram notifications
-- [ ] Time-based scheduler
-- [ ] Code signing via SignPath Foundation
+See **[ROADMAP.md](ROADMAP.md)** for detailed feature plans (v1.2 – v4.0+)
