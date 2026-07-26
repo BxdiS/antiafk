@@ -16,35 +16,35 @@ The major bumps are the interesting ones. Adding a server isn't a feature you bo
 
 Right now the bot clicks the same thing at the same pace forever. That's fine until someone looks at it.
 
-- Watch how long AFK checks actually take and adapt the click rate instead of using fixed delays
-- Pick categories at random rather than hammering one
-- Uneven pauses, so the rhythm doesn't read as a script
-- Notice when you've taken over manually and step aside until you're done
-- Spot a frozen or crashed game and bring it back up
+- [ ] Watch how long AFK checks actually take and adapt the click rate instead of using fixed delays
+- [ ] Pick categories at random rather than hammering one
+- [ ] Uneven pauses, so the rhythm doesn't read as a script
+- [ ] Notice when you've taken over manually and step aside until you're done
+- [ ] Spot a frozen or crashed game and bring it back up
 
 ## v1.3.0 — Not falling over
 
-- Trim memory use — it's heavier than it needs to be for what it does
-- Come back on its own after a crash instead of silently dying in the tray
-- Catch exceptions on the paths that currently take the whole app down
-- Periodic self-check so a half-broken state gets noticed early
+- [ ] Trim memory use — it's heavier than it needs to be for what it does
+- [ ] Come back on its own after a crash instead of silently dying in the tray
+- [ ] Catch exceptions on the paths that currently take the whole app down
+- [ ] Periodic self-check so a half-broken state gets noticed early
 
 ## v1.4.0 — Telling you things
 
 The Telegram bot exists but barely does anything yet.
 
-- Telegram: errors, status on request, start/stop from chat, a daily activity summary
-- Discord webhook for people who live there instead
-- Native Windows notifications
-- Optional sounds, for when the window isn't visible
-- A small "buy me a coffee" link somewhere unobtrusive
+- [ ] Telegram: errors, status on request, start/stop from chat, a daily activity summary
+- [ ] Discord webhook for people who live there instead
+- [ ] Native Windows notifications
+- [ ] Optional sounds, for when the window isn't visible
+- [ ] A small "buy me a coffee" link somewhere unobtrusive
 
 ## v1.5.0 — Fitting more setups
 
-- Resolutions beyond 16:9 — 4:3, 21:9, ultrawide
-- Follow the Windows light/dark setting
-- Global hotkeys for start/stop, rebindable
-- More interface languages: DE, FR, ES, PT, PL alongside RU and EN
+- [ ] Resolutions beyond 16:9 — 4:3, 21:9, ultrawide
+- [ ] Follow the Windows light/dark setting
+- [ ] Global hotkeys for start/stop, rebindable
+- [ ] More interface languages: DE, FR, ES, PT, PL alongside RU and EN
 
 ## v2.0.0 — GTA5RP
 
@@ -52,7 +52,7 @@ The big one. Everything server-specific — coordinates, window titles, the mark
 
 ## v3.0.0 — Opening it up
 
-- Let users describe their own click patterns instead of shipping mine
-- A local API so other tools can start, stop and read the bot's state
+- [ ] Let users describe their own click patterns instead of shipping mine
+- [ ] A local API so other tools can start, stop and read the bot's state
 
 Ideas, not commitments. If nobody wants them, they won't happen.
