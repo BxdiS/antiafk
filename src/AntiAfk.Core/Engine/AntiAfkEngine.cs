@@ -424,12 +424,20 @@ public sealed class AntiAfkEngine
                 // window ever closing, so EnsureGameWindowAsync never notices and startup recovery
                 // never re-arms. Log back in here, otherwise the cycle keeps firing marketplace
                 // clicks into the character-select screen.
-                if (await RunAutoLoginIfAtCharacterSelectAsync("Cycle", cancellationToken)
-                    && _stateDetector.IsAtCharacterSelect())
+                if (await RunAutoLoginIfAtCharacterSelectAsync("Cycle", cancellationToken))
                 {
-                    _logger.Warning("Still at character select after auto-login. Skipping marketplace recovery this cycle.");
-                    _progress.Phase = EnginePhase.ReturnFocus;
-                    break;
+                    if (_stateDetector.IsAtCharacterSelect())
+                    {
+                        _logger.Warning("Still at character select after auto-login. Skipping marketplace recovery this cycle.");
+                        _progress.Phase = EnginePhase.ReturnFocus;
+                        break;
+                    }
+
+                    // Auto-login returns the moment the HUD pixel appears, while the world is still
+                    // settling. Recovery starts by clicking, and a click sent now lands on whatever
+                    // is still transitioning rather than on the target - the same reason every other
+                    // action in this engine is separated by a cooldown.
+                    await DelaySeconds(timings.InitFocusDelay, cancellationToken);
                 }
 
                 _stateDetector.SmartStateRecovery();
