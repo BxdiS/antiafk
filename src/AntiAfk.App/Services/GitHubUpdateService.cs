@@ -212,8 +212,11 @@ public sealed class GitHubUpdateService : IUpdateService
 
             if (!await VerifyDownloadedFileAsync(exePath, asset.BrowserDownloadUrl, cancellationToken))
             {
-                _logger.Warning("Downloaded file verification failed.");
+                _logger.Error($"Update {remoteVersion} discarded: integrity check did not pass.");
                 Directory.Delete(tempDir, true);
+                // Without this the tray would sit on "Downloading" forever, since the state is
+                // only ever advanced past Downloading on the success path.
+                SetAvailability(UpdateAvailability.None);
                 return;
             }
 
@@ -253,6 +256,9 @@ public sealed class GitHubUpdateService : IUpdateService
         return client;
     }
 
+    // The downloaded file is about to overwrite the running executable and be started, so
+    // "could not verify" must never be treated as "verified". Every failure path returns false
+    // and the update is discarded.
     private async Task<bool> VerifyDownloadedFileAsync(string exePath, string downloadUrl, CancellationToken cancellationToken)
     {
         try
@@ -261,8 +267,10 @@ public sealed class GitHubUpdateService : IUpdateService
             using var checksumResponse = await HttpClient.GetAsync(sha256Path, cancellationToken);
             if (!checksumResponse.IsSuccessStatusCode)
             {
-                _logger.Warning("Could not download checksum file for verification.");
-                return true;
+                _logger.Error(
+                    $"Checksum file unavailable (HTTP {(int)checksumResponse.StatusCode}). " +
+                    "Rejecting the update: an unverifiable binary is treated as untrusted.");
+                return false;
             }
 
             var checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
@@ -282,10 +290,15 @@ public sealed class GitHubUpdateService : IUpdateService
             _logger.Info("Download verification passed.");
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            // Shutdown, not a verification failure - let the caller handle it as cancellation.
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.Error("Download verification error.", ex);
-            return true;
+            _logger.Error("Download verification failed. Rejecting the update.", ex);
+            return false;
         }
     }
 
