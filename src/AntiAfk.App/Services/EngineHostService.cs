@@ -12,6 +12,16 @@ public sealed class EngineHostService : IDisposable
     private readonly IAppLogger _logger;
     private readonly AntiAfk.Infrastructure.Localization.LocalizationService _localization;
 
+    // A deterministic crash used to restart forever on a fixed 3s timer, filling the log with
+    // identical stack traces. Back off between attempts and stop after a few failures in a row.
+    private const int MaxConsecutiveFailures = 5;
+    private static readonly TimeSpan FirstRetryDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(60);
+
+    // A run that lasted this long was healthy, so a crash after it starts a fresh streak
+    // instead of counting towards an older, unrelated one.
+    private static readonly TimeSpan StableRunThreshold = TimeSpan.FromMinutes(5);
+
     private CancellationTokenSource? _cts;
     private Task? _workerTask;
     private bool _isRunning;
@@ -90,8 +100,12 @@ public sealed class EngineHostService : IDisposable
 
     private async Task RunWorkerAsync(CancellationToken cancellationToken)
     {
+        var consecutiveFailures = 0;
+
         while (!cancellationToken.IsCancellationRequested)
         {
+            var startedUtc = DateTime.UtcNow;
+
             try
             {
                 await _engine.RunAsync(cancellationToken);
@@ -103,13 +117,54 @@ public sealed class EngineHostService : IDisposable
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
-                _logger.Error("Worker crashed. Auto-restarting in 3 seconds...", ex);
-                UserNotificationRequested?.Invoke(_localization.Get("notify.engine_restarted"));
+                if (DateTime.UtcNow - startedUtc >= StableRunThreshold)
+                {
+                    consecutiveFailures = 0;
+                }
+
+                consecutiveFailures++;
                 _progressStore.Save(_engine.CreateProgressSnapshot());
-                await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+
+                if (consecutiveFailures >= MaxConsecutiveFailures)
+                {
+                    _logger.Error(
+                        $"Worker crashed {consecutiveFailures} times in a row. Giving up - the failure looks " +
+                        "permanent, so restarting again would only repeat it. Press Start to retry.",
+                        ex);
+                    UserNotificationRequested?.Invoke(_localization.Get("notify.engine_gave_up"));
+
+                    // Clear this before raising the event: the tray reads IsRunning to label the
+                    // start/stop item, and it must read "Start" once we have stopped retrying.
+                    _isRunning = false;
+                    StatusChanged?.Invoke(EngineStatus.Error);
+                    return;
+                }
+
+                var retryDelay = ComputeRetryDelay(consecutiveFailures);
+                _logger.Error(
+                    $"Worker crashed (attempt {consecutiveFailures}/{MaxConsecutiveFailures}). " +
+                    $"Auto-restarting in {retryDelay.TotalSeconds:F0} seconds...",
+                    ex);
+                UserNotificationRequested?.Invoke(_localization.Get("notify.engine_restarted"));
+
+                try
+                {
+                    await Task.Delay(retryDelay, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
                 _engine.LoadProgress(_progressStore.LoadOrDefault());
             }
         }
+    }
+
+    private static TimeSpan ComputeRetryDelay(int consecutiveFailures)
+    {
+        var seconds = FirstRetryDelay.TotalSeconds * Math.Pow(2, consecutiveFailures - 1);
+        return TimeSpan.FromSeconds(Math.Min(seconds, MaxRetryDelay.TotalSeconds));
     }
 
     public void Dispose()
