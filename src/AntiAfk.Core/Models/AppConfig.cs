@@ -43,11 +43,13 @@ public sealed class TimingSettings
     // registered the hover and nothing is still animating under it.
     public double CursorArrivalSettle { get; set; } = 5.0;
 
-    // Cursor is not allowed to move again until this long after the button came up.
+    // The game's UI acts on the release, not the press, so this is the wait that matters: nothing
+    // may move the cursor until the game has processed the click it just received.
     public double PostClickCursorHold { get; set; } = 5.0;
 
-    // How long a press is held before release.
-    public double ClickHoldDuration { get; set; } = 0.12;
+    // How long the button stays down. This is not a cooldown - it is just how long a person holds a
+    // button for, so it is short and randomised rather than a fixed value.
+    public RandomRange ClickHoldDuration { get; set; } = new(0.04, 0.09);
 
     public static TimingSettings CreateDefault() => new();
 }

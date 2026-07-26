@@ -107,16 +107,22 @@ public sealed class InputService : IInputService
             var timings = _timingsProvider();
             MoveCursorTo(screenX, screenY, timings);
 
-            // Press and release are their own events, carrying no movement. Windows coalesces
-            // WM_MOUSEMOVE by default, so an event that is both a move and a button change can be
-            // merged with a later move and delivered at that move's position - the button then
-            // appears to be held and only released once the cursor sets off for the next target.
-            // Button flags signal a state change and apply wherever the cursor already is, which is
-            // the point MoveCursorTo has just parked it on.
+            // Press and release are their own events, carrying no movement, so neither can be
+            // merged into a mouse-move by the queue's default coalescing. A button flag signals a
+            // state change and applies wherever the cursor already is - the point MoveCursorTo has
+            // just parked it on.
+            //
+            // The gap between them is not a cooldown. The game's UI acts on the release, so this is
+            // only how long a person holds the button down: short and randomised. The wait that
+            // actually matters comes after the release, below.
             var cursorAtPress = System.Windows.Forms.Cursor.Position;
             SendButton(NativeMethods.MouseeventfLeftdown);
-            Thread.Sleep(TimeSpan.FromSeconds(timings.ClickHoldDuration));
+            Thread.Sleep(TimeSpan.FromSeconds(timings.ClickHoldDuration.Sample(_random)));
             SendButton(NativeMethods.MouseeventfLeftup);
+
+            // Stamped before anything else runs: the hold below has to be measured from the release
+            // itself, since that is the moment the game treats as the click.
+            _lastClickFinishedUtc = DateTime.UtcNow;
             var cursorAtRelease = System.Windows.Forms.Cursor.Position;
 
             // Reports where the cursor actually was around the press. If a click still lands on the
@@ -134,9 +140,9 @@ public sealed class InputService : IInputService
                 _logger.Info($"Click ({screenX},{screenY}): cursor held on target through press and release.");
             }
 
-            // Keep the cursor where it is until the target has had a chance to act on the click.
-            // MoveCursorTo tops this up if the next move comes sooner than the full hold.
-            _lastClickFinishedUtc = DateTime.UtcNow;
+            // The click has just landed, as far as the game is concerned. Nothing may move the
+            // cursor until it has acted on it. MoveCursorTo tops this up if the next move is
+            // requested sooner than the full hold.
             Thread.Sleep(TimeSpan.FromSeconds(timings.PostClickCursorHold));
         }
         catch (Exception ex)
