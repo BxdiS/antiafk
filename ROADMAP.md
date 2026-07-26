@@ -1,57 +1,60 @@
-# Roadmap — AntiAFK
+# Roadmap
 
-Planned features and improvements.
+Where AntiAFK is headed. Nothing here has a date attached — things get done when they get done, and the order shifts if something turns out to matter more.
 
----
+Current release: **v1.1.9**
 
-## v1.2.0 — Smart Behavior & Anti-Detection
+## How versions work
 
-- [ ] Adaptive clicks — Detect AFK check timeouts and adjust click frequency accordingly
-- [ ] Smart category selection — Randomize category choices instead of clicking the same one
-- [ ] Random pauses — Human-like behavior with unpredictable delays
-- [ ] Play detection — Auto-disable when player takes manual control for extended period
-- [ ] Game crash detection — Automatically restart game if it freezes or crashes
+| Bump | When |
+|------|------|
+| Patch (`1.1.x`) | Bug fixes, tweaks to timings and coordinates, small polish |
+| Minor (`1.x.0`) | New features that fit the app as it is today — one server, one window layout |
+| Major (`x.0.0`) | The app stops being the same app: a second game server, or letting outside code drive it |
 
----
+The major bumps are the interesting ones. Supporting another GTA RP server isn't a feature you bolt on — coordinates, UI detection and the whole click cycle are written around one specific client, so a second one means splitting that apart into something pluggable. Same story with an API: once other programs can control the bot, its internals become a contract I have to keep. Both earn a `2.0` / `3.0`.
 
-## v1.3.0 — Stability & Performance
+## v1.2.0 — Behaviour
 
-- [ ] Memory optimization — Reduce RAM footprint
-- [ ] Auto-recovery — Restart application if it crashes
-- [ ] Anti-crash system — Comprehensive exception handling, never crash
-- [ ] Healthcheck — Periodic verification all systems are working
+Right now the bot clicks the same thing at the same pace forever. That's fine until someone looks at it.
 
----
+- Watch how long AFK checks actually take and adapt the click rate instead of using fixed delays
+- Pick categories at random rather than hammering one
+- Uneven pauses, so the rhythm doesn't read as a script
+- Notice when you've taken over manually and step aside until you're done
+- Spot a frozen or crashed game and bring it back up
 
-## v1.4.0 — Notifications & Alerts
+## v1.3.0 — Not falling over
 
-- [ ] Telegram bot expansion:
-  - Error notifications
-  - Periodic status reports
-  - Remote commands (start/stop/status)
-  - Daily activity graph
-- [ ] Discord webhook — Log events to Discord
-- [ ] Windows notifications — Native taskbar alerts
-- [ ] Sound alerts — Audio cues for events
-- [ ] Donation reminder — Coffee ☕ support button
+- Trim memory use — it's heavier than it needs to be for what it does
+- Come back on its own after a crash instead of silently dying in the tray
+- Catch exceptions on the paths that currently take the whole app down
+- Periodic self-check so a half-broken state gets noticed early
 
----
+## v1.4.0 — Telling you things
 
-## v1.5.0 — Platform & UI
+The Telegram bot exists but barely does anything yet.
 
-- [ ] Multi-resolution support — Beyond 16:9 (4:3, 21:9, ultrawide, etc.)
-- [ ] Multi-server support — Support other GTA RP servers with marketplace
-- [ ] Dark mode — System theme integration with Windows
-- [ ] Keyboard shortcuts — Quick enable/disable (customizable hotkeys)
-- [ ] Multi-language support — RU, EN, DE, FR, ES, PT, PL
+- Telegram: errors, status on request, start/stop from chat, a daily activity summary
+- Discord webhook for people who live there instead
+- Native Windows notifications
+- Optional sounds, for when the window isn't visible
+- A small "buy me a coffee" link somewhere unobtrusive
 
----
+## v1.5.0 — Fitting more setups
 
-## v4.0.0 — Advanced (Long-term exploration)
+- Resolutions beyond 16:9 — 4:3, 21:9, ultrawide
+- Follow the Windows light/dark setting
+- Global hotkeys for start/stop, rebindable
+- More interface languages: DE, FR, ES, PT, PL alongside RU and EN
 
-- [ ] Custom scripts — Users write their own behavior patterns
-- [ ] API — External applications can manage and monitor the bot
+## v2.0.0 — A second server
 
----
+The big one. Everything server-specific — coordinates, window titles, the marketplace flow — gets pulled out of the core and into per-server profiles, so adding a third server later is a config file rather than a rewrite. Includes a server picker in settings.
 
-**Last updated:** 2026-07-26
+## v3.0.0 — Opening it up
+
+- Let users describe their own click patterns instead of shipping mine
+- A local API so other tools can start, stop and read the bot's state
+
+Ideas, not commitments. If nobody wants them, they won't happen.
