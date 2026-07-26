@@ -79,7 +79,7 @@ internal static class Program
                     runtime,
                     () => configService.Current.Timings);
                 var gameLauncher = new GameLauncherService(configService, logger);
-                var autoLoginService = new AutoLoginService(logger, screenCapture, inputService);
+                var autoLoginService = new AutoLoginService(logger, screenCapture, inputService, windowService);
                 var progressStore = new EngineProgressStore();
 
                 var engine = new AntiAfkEngine(

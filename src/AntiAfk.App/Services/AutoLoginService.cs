@@ -6,33 +6,81 @@ namespace AntiAfk.App.Services;
 
 public sealed class AutoLoginService : IAutoLoginService
 {
-    // Server-connected / character-select indicator pixel (approx. ff007e)
-    private const int ServerPixelX = 634;
-    private const int ServerPixelY = 216;
-    private const uint ServerPixelColor = 0xff007e;
+    /// <summary>
+    /// Every screen coordinate used by the login flow, in one place.
+    ///
+    /// These are raw screen pixels measured on a 1920x1080 primary monitor with the game running
+    /// fullscreen from (0,0). Unlike the rest of the engine they deliberately do NOT go through
+    /// CoordinateScaler: the launcher window exists before the game window does, so at the point
+    /// the first clicks happen there is no game window to scale against.
+    ///
+    /// The consequence is that on any other resolution, in windowed mode, or with the game on a
+    /// secondary monitor, these clicks land somewhere else entirely. AutoLoginAsync logs the actual
+    /// screen size on entry so that shows up in the log rather than looking like a random misclick.
+    ///
+    /// Everything from character select onwards could in principle be scaled, since the game window
+    /// does exist by then - see ROADMAP.
+    /// </summary>
+    private static class Coords
+    {
+        /// Resolution every value below was measured at.
+        public const int MeasuredWidth = GameConstants.BaseWidth;
+        public const int MeasuredHeight = GameConstants.BaseHeight;
 
-    // Character-select screen indicator (approx. e81c5a). If this is already visible when
-    // AutoLoginAsync starts, we're past the launcher and GTA5 is already running - the user
-    // may have started the script from this point rather than from the launcher.
-    // Kept in sync with GameConstants.BaseCharSelectPixel, which StateDetector uses (scaled).
-    private static readonly int CharacterSelectPixelX = GameConstants.BaseCharSelectPixel.X;
-    private static readonly int CharacterSelectPixelY = GameConstants.BaseCharSelectPixel.Y;
-    private const uint CharacterSelectPixelColor =
-        ((uint)GameConstants.CharSelectR << 16) | ((uint)GameConstants.CharSelectG << 8) | GameConstants.CharSelectB;
+        /// Launcher login button. The launcher window spans roughly (410,170)-(1570,907).
+        public static readonly (int X, int Y) LoginButton = (950, 487);
 
-    // Launcher login button
-    private const int LoginButtonX = 950;
-    private const int LoginButtonY = 487;
+        /// Server-connected / character-select indicator, approx. #ff007e.
+        public static readonly (int X, int Y) ServerPixel = (634, 216);
+        public const uint ServerColor = 0xff007e;
+        public const int ServerTolerance = 40;
+
+        /// Character-select screen indicator, approx. #e81c5a. If this is already lit when
+        /// AutoLoginAsync starts we are past the launcher and GTA5 is already running - the user
+        /// may have started the app from this point rather than from the launcher.
+        /// Kept in sync with GameConstants.BaseCharSelectPixel, which StateDetector uses (scaled).
+        public static readonly (int X, int Y) CharacterSelectPixel = GameConstants.BaseCharSelectPixel;
+        public const uint CharacterSelectColor =
+            ((uint)GameConstants.CharSelectR << 16) | ((uint)GameConstants.CharSelectG << 8) | GameConstants.CharSelectB;
+        public const int CharacterSelectTolerance = GameConstants.CharSelectTolerance;
+
+        /// Lit only when the third character slot has been purchased, approx. #e81c5a.
+        public static readonly (int X, int Y) Character3Probe = (1226, 1000);
+        public const uint Character3Color = 0xe81c5a;
+        public const int Character3Tolerance = 30;
+
+        /// Character tile, then the confirm button that appears after selecting it.
+        public static readonly (int X, int Y) Character1 = (594, 933);
+        public static readonly (int X, int Y) Character1Confirm = (593, 993);
+        public static readonly (int X, int Y) Character2 = (982, 929);
+        public static readonly (int X, int Y) Character2Confirm = (959, 993);
+        public static readonly (int X, int Y) Character3 = (1333, 927);
+        public static readonly (int X, int Y) Character3Confirm = (1323, 993);
+
+        /// Default spawn point. Extend when additional spawn slots are mapped.
+        public static readonly (int X, int Y) DefaultSpawn = (1053, 964);
+
+        /// In-game HUD pixel, present once the world has finished loading, approx. #ff007f.
+        public static readonly (int X, int Y) HudPixel = GameConstants.BaseHudPixel;
+        public const uint HudColor = 0xff007f;
+        public const int HudTolerance = 40;
+    }
 
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;
     private readonly IInputService _inputService;
+    private readonly IWindowService _windowService;
 
-    public AutoLoginService(IAppLogger logger, IScreenCaptureService screenCapture, IInputService inputService)
+    public AutoLoginService(
+        IAppLogger logger,
+        IScreenCaptureService screenCapture,
+        IInputService inputService,
+        IWindowService windowService)
     {
         _logger = logger;
         _screenCapture = screenCapture;
         _inputService = inputService;
+        _windowService = windowService;
     }
 
     public async Task AutoLoginAsync(CancellationToken cancellationToken, int characterSlot = 1, int spawnSlot = 1)
@@ -40,6 +88,7 @@ public sealed class AutoLoginService : IAutoLoginService
         try
         {
             _logger.Info("Starting auto-login sequence...");
+            LogScreenGeometry();
 
             // Note: the launcher is already started by the engine (GameLauncherService)
             // before this sequence runs, so we do NOT launch it again here.
@@ -48,7 +97,10 @@ public sealed class AutoLoginService : IAutoLoginService
             // case where the script is started mid-flow (e.g. the user already logged in via
             // the launcher manually).
             var alreadyAtCharacterSelect = IsPixelColor(
-                CharacterSelectPixelX, CharacterSelectPixelY, CharacterSelectPixelColor, GameConstants.CharSelectTolerance);
+                Coords.CharacterSelectPixel.X,
+                Coords.CharacterSelectPixel.Y,
+                Coords.CharacterSelectColor,
+                Coords.CharacterSelectTolerance);
 
             if (alreadyAtCharacterSelect)
             {
@@ -101,6 +153,21 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
+    // The coordinates below are fixed 1080p values, so the single most useful thing a log can say
+    // when clicks "go nowhere" is what the screen actually is.
+    private void LogScreenGeometry()
+    {
+        var (width, height) = _windowService.GetScreenSize();
+        _logger.Info($"Auto-login: primary screen is {width}x{height}.");
+
+        if (width != Coords.MeasuredWidth || height != Coords.MeasuredHeight)
+        {
+            _logger.Warning(
+                $"Auto-login: login coordinates are hardcoded for {Coords.MeasuredWidth}x{Coords.MeasuredHeight} " +
+                "fullscreen at (0,0) and are not scaled. On this screen the clicks will not line up.");
+        }
+    }
+
     private async Task ClickMajesticLoginAsync(CancellationToken cancellationToken)
     {
         // Launcher was already started by the engine. Give the UI time to render,
@@ -113,8 +180,8 @@ public sealed class AutoLoginService : IAutoLoginService
             await Task.Delay(1000, cancellationToken);
         }
 
-        _logger.Info($"Auto-login: clicking launcher login button at ({LoginButtonX}, {LoginButtonY})");
-        _inputService.ClickScreen(LoginButtonX, LoginButtonY);
+        _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
+        _inputService.ClickScreen(Coords.LoginButton.X, Coords.LoginButton.Y);
         await Task.Delay(4000, cancellationToken); // Wait for game process to launch (4s)
     }
 
@@ -145,16 +212,16 @@ public sealed class AutoLoginService : IAutoLoginService
 
     private async Task<bool> WaitForServerConnectionAsync(CancellationToken cancellationToken)
     {
-        // Wait for the server-connected / character-select indicator
-        // (pixel 634,216 ~ ff007e). This screen means we can start selecting a character.
+        // Wait for the server-connected / character-select indicator. Once it is lit we can
+        // start selecting a character.
         var attempts = 0;
         const int maxAttempts = 300; // up to 5 minutes
 
-        _logger.Info($"Auto-login: waiting for server connection (pixel {ServerPixelX},{ServerPixelY})...");
+        _logger.Info($"Auto-login: waiting for server connection (pixel {Coords.ServerPixel.X},{Coords.ServerPixel.Y})...");
 
         while (attempts < maxAttempts)
         {
-            if (IsPixelColor(ServerPixelX, ServerPixelY, ServerPixelColor, tolerance: 40))
+            if (IsPixelColor(Coords.ServerPixel.X, Coords.ServerPixel.Y, Coords.ServerColor, Coords.ServerTolerance))
             {
                 _logger.Info("Server connection / character-select screen detected");
                 // Let the UI stabilise before we start clicking (3s for slow connections)
@@ -184,7 +251,8 @@ public sealed class AutoLoginService : IAutoLoginService
     private async Task SelectCharacterAsync(int characterSlot, CancellationToken cancellationToken)
     {
         // Character 3 is only available if purchased; fall back to slot 1 if not.
-        var char3Available = IsPixelColor(1226, 1000, 0xe81c5a, tolerance: 30);
+        var char3Available = IsPixelColor(
+            Coords.Character3Probe.X, Coords.Character3Probe.Y, Coords.Character3Color, Coords.Character3Tolerance);
 
         int character = characterSlot;
         if (characterSlot == 3 && !char3Available)
@@ -214,16 +282,16 @@ public sealed class AutoLoginService : IAutoLoginService
 
     private async Task WaitForGameLoadAsync(CancellationToken cancellationToken)
     {
-        // Wait for the in-game HUD to appear (pixel 1888,25 ~ ff007f)
+        // Wait for the in-game HUD to appear
         var loaded = false;
         var attempts = 0;
         const int maxAttempts = 300; // up to 5 minutes
 
-        _logger.Info("Auto-login: waiting for in-game HUD...");
+        _logger.Info($"Auto-login: waiting for in-game HUD (pixel {Coords.HudPixel.X},{Coords.HudPixel.Y})...");
 
         while (!loaded && attempts < maxAttempts)
         {
-            if (IsPixelColor(1888, 25, 0xff007f, tolerance: 40))
+            if (IsPixelColor(Coords.HudPixel.X, Coords.HudPixel.Y, Coords.HudColor, Coords.HudTolerance))
             {
                 loaded = true;
                 break;
@@ -248,10 +316,9 @@ public sealed class AutoLoginService : IAutoLoginService
     {
         return character switch
         {
-            1 => (594, 933, 593, 993),
-            2 => (982, 929, 959, 993),
-            3 => (1333, 927, 1323, 993),
-            _ => (594, 933, 593, 993)
+            2 => (Coords.Character2.X, Coords.Character2.Y, Coords.Character2Confirm.X, Coords.Character2Confirm.Y),
+            3 => (Coords.Character3.X, Coords.Character3.Y, Coords.Character3Confirm.X, Coords.Character3Confirm.Y),
+            _ => (Coords.Character1.X, Coords.Character1.Y, Coords.Character1Confirm.X, Coords.Character1Confirm.Y)
         };
     }
 
@@ -260,7 +327,7 @@ public sealed class AutoLoginService : IAutoLoginService
         // Default spawn point; extend here when additional spawn slots are mapped.
         return spawnSlot switch
         {
-            _ => (1053, 964)
+            _ => (Coords.DefaultSpawn.X, Coords.DefaultSpawn.Y)
         };
     }
 
