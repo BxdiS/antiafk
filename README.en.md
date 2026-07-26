@@ -1,70 +1,48 @@
+[**Русская версия →**](README.md)
+
 # AntiAFK
 
-**AFK prevention bot for GTA V multiplayer marketplace.**  
-Keeps your character active so you won't get kicked for inactivity.
+Keeps your character active so the server doesn't kick you for being idle.
 
----
+Built for **Majestic RP**, which it supports today. **GTA5RP** is coming in 2.0.0 — see the [roadmap](ROADMAP.md).
 
-## 🚀 Download
+## Download
 
-**[Latest Release](https://github.com/BxdiS/antiafk/releases)** — `AntiAFK.exe`
+Grab the latest build from [Releases](https://github.com/BxdiS/antiafk/releases) — you only need `AntiAFK.exe`.
 
-> **Portable** · No installation · No admin rights required  
-> **Single file** (68 MB) · All-in-one executable
+Single file, no installer, no admin rights. It doesn't write itself into the system anywhere: delete the exe and it's gone without a trace.
 
-### Code Signing
+The binary isn't signed yet, so Windows SmartScreen may complain the first time you run it. A [SignPath Foundation](https://signpath.org/) application is in progress; once it goes through, releases will be signed.
 
-*Binaries are currently being prepared for [SignPath Foundation](https://signpath.org/) free code signing.*  
-*(Soon: Each release will include a digital signature verifiable via Windows certificate validation)*
+## Getting started
 
----
+Download it, run it, look for the tray icon. Hit **Start** and walk away.
 
-## ⚡ Quick Start
+The icon colour tells you what's going on:
 
-1. **Download** `AntiAFK.exe` from [Releases](https://github.com/BxdiS/antiafk/releases)
-2. **Run** — No installation needed, no admin required
-3. **Tray icon appears** → Click **Start** to run bot, **Stop** to pause
+| | |
+|--|--|
+| 🟢 | running |
+| 🟡 | waiting for the game |
+| 🔴 | stopped |
+| 🔵 | update available |
 
-| Icon | Status |
-|------|--------|
-| 🟢 | Running |
-| 🟡 | Waiting for game |
-| 🔴 | Stopped |
-| 🔵 | Update available |
+The tray menu has settings, a live log, version info, an update button when there's something to update, and exit.
 
-**Tray menu:** Settings · Log Console · About · Update (when available) · Exit
+## Requirements
 
----
+Windows 10 or 11, x64. The game needs to be in borderless windowed mode at a 16:9 resolution. Other aspect ratios aren't supported yet — that's [on the roadmap](ROADMAP.md).
 
-## 📋 Requirements
+## More detail
 
-- **Windows 10/11** x64
-- **Game window:** Borderless windowed mode, 16:9 resolution
+[docs/GUIDE.md](docs/GUIDE.md) covers building from source, configuration, how auto-updates work, and the code signing situation.
 
----
+## License
 
-## 📖 Documentation
+[GPL v3](LICENSE), © 2026 [BxdiS](https://github.com/BxdiS).
 
-See [docs/GUIDE.md](docs/GUIDE.md) for:
-- Building from source
-- Configuration options
-- Auto-update mechanism
-- SignPath code signing setup
+Source is fully open. No telemetry, no system modifications.
 
----
+## What's next
 
-## 📜 License
-
-**[GNU GPL v3](LICENSE)** — Copyright © 2026 [BxdiS](https://github.com/BxdiS)
-
-- **Open source** — Full source code available
-- **No telemetry** — All settings stored in memory only
-- **Safe** — No malware, no unwanted system modifications
-
-GPL-3.0 terms: [LICENSE](LICENSE)
-
----
-
-## 🗺️ Roadmap
-
-See **[ROADMAP.md](ROADMAP.md)** for detailed feature plans (v1.2 – v4.0+)
+[ROADMAP.md](ROADMAP.md) — planned work, and why some of it counts as a major version bump.
