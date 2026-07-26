@@ -183,14 +183,18 @@ public sealed class AntiAfkEngine
         return false;
     }
 
-    private async Task RunAutoLoginIfAtCharacterSelectAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs the auto-login sequence if the game is sitting on the character-select screen.
+    /// Returns true when a login was attempted, so the caller can re-check the outcome.
+    /// </summary>
+    private async Task<bool> RunAutoLoginIfAtCharacterSelectAsync(string context, CancellationToken cancellationToken)
     {
         if (_autoLoginService is null || !_stateDetector.IsAtCharacterSelect())
         {
-            return;
+            return false;
         }
 
-        _logger.Info("Character-select screen detected on startup. Running auto-login...");
+        _logger.Info($"{context}: character-select screen detected. Running auto-login...");
         try
         {
             await _autoLoginService.AutoLoginAsync(cancellationToken);
@@ -203,6 +207,8 @@ public sealed class AntiAfkEngine
         {
             _logger.Error("Auto-login sequence failed", ex);
         }
+
+        return true;
     }
 
     private void BindGameWindow(GameWindowInfo game)
@@ -226,7 +232,7 @@ public sealed class AntiAfkEngine
         // (e.g. the user logged in manually, or started the app mid-flow). In that case the
         // launcher path in EnsureGameWindowAsync was skipped, so auto-login has not run yet.
         // Finish logging in before any marketplace handling.
-        await RunAutoLoginIfAtCharacterSelectAsync(cancellationToken);
+        await RunAutoLoginIfAtCharacterSelectAsync("Startup", cancellationToken);
 
         _stateDetector.SmartStateRecovery();
         RestoreUserWindow("Startup");
@@ -413,6 +419,19 @@ public sealed class AntiAfkEngine
             case EnginePhase.StateRecovery:
                 _windowService.ForceForeground(_gameHandle);
                 await DelaySeconds(0.3, cancellationToken);
+
+                // A server disconnect drops the player back to character select without the game
+                // window ever closing, so EnsureGameWindowAsync never notices and startup recovery
+                // never re-arms. Log back in here, otherwise the cycle keeps firing marketplace
+                // clicks into the character-select screen.
+                if (await RunAutoLoginIfAtCharacterSelectAsync("Cycle", cancellationToken)
+                    && _stateDetector.IsAtCharacterSelect())
+                {
+                    _logger.Warning("Still at character select after auto-login. Skipping marketplace recovery this cycle.");
+                    _progress.Phase = EnginePhase.ReturnFocus;
+                    break;
+                }
+
                 _stateDetector.SmartStateRecovery();
                 _progress.Phase = EnginePhase.ReturnFocus;
                 break;
