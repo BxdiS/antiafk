@@ -289,9 +289,25 @@ public sealed class AntiAfkEngine
                     continue;
                 }
 
+                // Avoiding the previous button is a preference, not a requirement. With a single
+                // configured button the filter empties the array, and _random.Next(0) returns 0,
+                // so indexing it threw. BaseButtons has 11 entries today, which is the only reason
+                // this is not already a crash.
                 var available = Enumerable.Range(0, _coordinates.Buttons.Count)
                     .Where(i => i != _progress.LastButtonIndex)
                     .ToArray();
+                if (available.Length == 0)
+                {
+                    available = [.. Enumerable.Range(0, _coordinates.Buttons.Count)];
+                }
+
+                if (available.Length == 0)
+                {
+                    _logger.Error("No marketplace buttons are configured; skipping the background click.");
+                    await DelaySeconds(1, cancellationToken);
+                    continue;
+                }
+
                 var index = available[_random.Next(available.Length)];
                 _progress.LastButtonIndex = index;
                 var button = _coordinates.Buttons[index];
