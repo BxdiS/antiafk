@@ -67,6 +67,10 @@ public sealed class EngineHostService : IDisposable
 
         _engine.LoadProgress(progress);
         _engine.SetPendingUserWindow(_windowService.CaptureUserWindow(IntPtr.Zero));
+
+        // Each CancellationTokenSource owns a timer and a wait handle. Start/Stop cycles used to
+        // leave the previous one to the finaliser, so they accumulated for the life of the process.
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _isRunning = true;
         _workerTask = Task.Run(() => RunWorkerAsync(_cts.Token));
