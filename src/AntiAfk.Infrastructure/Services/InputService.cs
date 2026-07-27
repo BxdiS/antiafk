@@ -113,11 +113,11 @@ public sealed class InputService : IInputService
             //
             // If this ever needs tracing again, log it through IAppLogger before or after the click,
             // never between the steps.
-            System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
+            MoveCursorAbsolute(screenX, screenY);
             Thread.Sleep(300); // Time for the cursor to physically arrive before the press.
-            NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+            SendButton(NativeMethods.MouseeventfLeftdown);
             Thread.Sleep(100); // How long a person holds the button down.
-            NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+            SendButton(NativeMethods.MouseeventfLeftup);
             Thread.Sleep(200); // Nothing repositions the cursor until the game has acted on this.
         }
         catch (Exception ex)
@@ -135,6 +135,75 @@ public sealed class InputService : IInputService
         // sometimes landed on the previously focused window instead.
         Thread.Sleep(300);
         ClickScreen(screenX, screenY);
+    }
+
+    /// <summary>
+    /// Moves the cursor by injecting a movement event, not by setting the cursor position.
+    ///
+    /// This is the difference between a first run and a restart, and it is not in the click logic -
+    /// it is in whether the game can see the movement at all.
+    ///
+    /// Cursor.Position is SetCursorPos. It relocates the system pointer and produces nothing in the
+    /// input stream. GTA V reads the mouse through raw input and keeps its own pointer, advanced by
+    /// movement deltas; a SetCursorPos produces no delta, so the game's pointer does not follow.
+    /// The button event that comes next is then applied wherever the game still thinks the pointer
+    /// is, not where we put the system cursor.
+    ///
+    /// Whether the two happen to agree depends on when the game last synchronised its pointer to
+    /// the system cursor, which it does on window activation. That is the whole reason the same
+    /// code behaved one way on a cold start and another way on a restart from character select -
+    /// nothing about the sequence differed, only whether the game's pointer had been synced by
+    /// something else beforehand.
+    ///
+    /// An injected absolute move is delivered through the same path as the click, so the game sees
+    /// real movement and its pointer tracks it, in both cases identically.
+    /// </summary>
+    private static void MoveCursorAbsolute(int screenX, int screenY)
+    {
+        var (normalisedX, normalisedY) = ToVirtualDesktopAbsolute(screenX, screenY);
+
+        Send(new NativeMethods.MouseInput
+        {
+            dx = normalisedX,
+            dy = normalisedY,
+            dwFlags = NativeMethods.MouseeventfMove
+                | NativeMethods.MouseeventfAbsolute
+                | NativeMethods.MouseeventfVirtualdesk
+        });
+    }
+
+    // Button state change only, applied where the cursor now is.
+    private static void SendButton(uint buttonFlag) =>
+        Send(new NativeMethods.MouseInput { dwFlags = buttonFlag });
+
+    private static void Send(NativeMethods.MouseInput mouseInput)
+    {
+        var input = new NativeMethods.Input
+        {
+            type = NativeMethods.InputMouse,
+            mi = mouseInput
+        };
+
+        NativeMethods.SendInput(1, [input], System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.Input>());
+    }
+
+    /// <summary>
+    /// Absolute mouse input is normalised to 0..65535 across the whole virtual desktop, so a second
+    /// monitor is handled by subtracting the virtual origin rather than assuming (0,0). That origin
+    /// is genuinely negative on this setup - the secondary display sits at (1920,-685) - and
+    /// assuming zero would put every click on the wrong part of the desktop.
+    /// </summary>
+    private static (int X, int Y) ToVirtualDesktopAbsolute(int screenX, int screenY)
+    {
+        var originX = NativeMethods.GetSystemMetrics(NativeMethods.SmXvirtualscreen);
+        var originY = NativeMethods.GetSystemMetrics(NativeMethods.SmYvirtualscreen);
+        var width = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SmCxvirtualscreen) - 1);
+        var height = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SmCyvirtualscreen) - 1);
+
+        var normalisedX = (int)Math.Round((screenX - originX) * 65535.0 / width);
+        var normalisedY = (int)Math.Round((screenY - originY) * 65535.0 / height);
+
+        return (Math.Clamp(normalisedX, 0, 65535), Math.Clamp(normalisedY, 0, 65535));
     }
 
     private static void SendMouseMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam)

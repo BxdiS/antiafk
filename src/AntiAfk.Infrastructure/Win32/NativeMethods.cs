@@ -131,6 +131,56 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
 
+    // ---- SendInput ----------------------------------------------------------------------------
+    // Cursor movement has to be injected as an input event, not applied with SetCursorPos. See the
+    // note on InputService.ClickScreen: SetCursorPos moves the pointer without producing anything
+    // the game can observe, and a game reading the mouse through raw input keeps its own pointer,
+    // which then does not follow.
+
+    public const uint InputMouse = 0;
+
+    public const uint MouseeventfMove = 0x0001;
+    public const uint MouseeventfLeftdown = 0x0002;
+    public const uint MouseeventfLeftup = 0x0004;
+    public const uint MouseeventfAbsolute = 0x8000;
+
+    // "Maps coordinates to the entire desktop. Must be used with MOUSEEVENTF_ABSOLUTE." Without it,
+    // normalised coordinates address the primary monitor only - wrong on any multi-monitor setup,
+    // and worse when a second monitor sits at a negative offset.
+    public const uint MouseeventfVirtualdesk = 0x4000;
+
+    // Virtual-desktop metrics, for normalising screen pixels into the 0..65535 absolute range.
+    public const int SmXvirtualscreen = 76;
+    public const int SmYvirtualscreen = 77;
+    public const int SmCxvirtualscreen = 78;
+    public const int SmCyvirtualscreen = 79;
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MouseInput
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    // Matches the native INPUT union layout: 40 bytes on x64, 28 on x86. MOUSEINPUT is the largest
+    // member, so declaring only that member is correct for mouse input.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Input
+    {
+        public uint type;
+        public MouseInput mi;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, [In] Input[] pInputs, int cbSize);
+
     public static IntPtr MakeLParam(int low, int high) => (IntPtr)((high << 16) | (low & 0xFFFF));
 
     public static string GetWindowTitle(IntPtr hWnd)
