@@ -54,7 +54,7 @@ public sealed class StateDetector : IStateDetector
         }
 
         _logger.Warning($"Warehouse notification detected. Clicking ({coords.WarnClickX}, {coords.WarnClickY})...");
-        _inputService.ClickScreenOnGame(gameHandle, coords.WarnClickX, coords.WarnClickY);
+        _inputService.ClickScreenOnWindow(gameHandle, coords.WarnClickX, coords.WarnClickY);
         Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().WarningClickDelay));
         return true;
     }
@@ -217,10 +217,10 @@ public sealed class StateDetector : IStateDetector
         _inputService.SendKeyToGame(gameHandle, NativeKeys.Down, 0.1);
         Thread.Sleep(TimeSpan.FromSeconds(timings.TabletOpenDelay));
         _logger.Info($"Clicking center ({coords.CenterX}, {coords.CenterY})...");
-        _inputService.ClickScreenOnGame(gameHandle, coords.CenterX, coords.CenterY);
+        _inputService.ClickScreenOnWindow(gameHandle, coords.CenterX, coords.CenterY);
         Thread.Sleep(TimeSpan.FromSeconds(1.0));
         _logger.Info($"Clicking marketplace icon ({coords.IconX}, {coords.IconY})...");
-        _inputService.ClickScreenOnGame(gameHandle, coords.IconX, coords.IconY);
+        _inputService.ClickScreenOnWindow(gameHandle, coords.IconX, coords.IconY);
         Thread.Sleep(TimeSpan.FromSeconds(timings.MarketplaceOpenDelay));
         CheckAndCloseWarning();
     }

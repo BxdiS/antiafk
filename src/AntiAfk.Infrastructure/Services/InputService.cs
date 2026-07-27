@@ -127,9 +127,9 @@ public sealed class InputService : IInputService
         }
     }
 
-    public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY)
+    public void ClickScreenOnWindow(IntPtr windowHandle, int screenX, int screenY)
     {
-        _windowService.ForceForeground(gameHandle);
+        _windowService.ForceForeground(windowHandle);
         // 300 ms after focus change: on lower-end machines the game window needs longer to
         // regain input focus than the previous 150 ms allowed, so the first click/keystroke
         // sometimes landed on the previously focused window instead.

@@ -70,6 +70,10 @@ public sealed class AutoLoginService : IAutoLoginService
     /// How long the character-select screen is left alone before the first click.
     private static readonly TimeSpan CharacterSelectSettle = TimeSpan.FromSeconds(3);
 
+    /// How long to keep looking for the launcher window after the launcher process was started.
+    /// A cold start on a slow disk can take a while to put anything on screen.
+    private static readonly TimeSpan LauncherWindowTimeout = TimeSpan.FromSeconds(60);
+
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;
     private readonly IInputService _inputService;
@@ -95,16 +99,52 @@ public sealed class AutoLoginService : IAutoLoginService
     {
         LogScreenGeometry();
 
+        var launcher = await WaitForLauncherWindowAsync(cancellationToken);
+
         const int waitTimeSeconds = 5;
         _logger.Info($"Auto-login: waiting {waitTimeSeconds}s for launcher UI to render...");
         await Task.Delay(TimeSpan.FromSeconds(waitTimeSeconds), cancellationToken);
 
+        // Re-read it after the wait: the launcher replaces its startup window with the real one
+        // while it renders, so the handle found a moment ago can already be gone.
+        launcher = _windowService.FindLauncherWindow() ?? launcher;
+
         _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
-        _inputService.ClickScreen(Coords.LoginButton.X, Coords.LoginButton.Y);
+        ClickOnWindow(launcher?.Handle ?? IntPtr.Zero, Coords.LoginButton.X, Coords.LoginButton.Y);
 
         // Give the launcher a moment to start the game process before the engine begins looking
         // for its window.
         await Task.Delay(4000, cancellationToken);
+    }
+
+    /// <summary>
+    /// Polls for the launcher window until it shows up or the timeout runs out. Returns null on
+    /// timeout; the caller still clicks, it just cannot raise anything first.
+    /// </summary>
+    private async Task<LauncherWindowInfo?> WaitForLauncherWindowAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + LauncherWindowTimeout;
+        var attempts = 0;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var launcher = _windowService.FindLauncherWindow();
+            if (launcher is not null)
+            {
+                _logger.Info(
+                    $"Auto-login: launcher window \"{launcher.Title}\" found at " +
+                    $"({launcher.Left},{launcher.Top}) {launcher.Width}x{launcher.Height}.");
+                return launcher;
+            }
+
+            await Task.Delay(1000, cancellationToken);
+            LogWaitProgress("the launcher window", ++attempts, (int)LauncherWindowTimeout.TotalSeconds);
+        }
+
+        _logger.Warning(
+            $"Auto-login: no launcher window after {LauncherWindowTimeout.TotalSeconds:F0}s. " +
+            "Clicking anyway - whatever is on top will receive it.");
+        return null;
     }
 
     /// <summary>
@@ -126,8 +166,17 @@ public sealed class AutoLoginService : IAutoLoginService
             // Settle before the first click, exactly as before.
             await Task.Delay(CharacterSelectSettle, cancellationToken);
 
-            await SelectCharacterAsync(characterSlot, cancellationToken);
-            await SelectSpawnAsync(spawnSlot, cancellationToken);
+            // Character select is a game screen, so the game window is what has to be on top for
+            // these clicks. The engine focuses it before calling in, but the settle delays below
+            // give anything else on the machine a window in which to steal focus back.
+            var gameHandle = _windowService.FindGameWindow()?.Handle ?? IntPtr.Zero;
+            if (gameHandle == IntPtr.Zero)
+            {
+                _logger.Warning("Auto-login: game window not found; clicks will go to whatever is on top.");
+            }
+
+            await SelectCharacterAsync(gameHandle, characterSlot, cancellationToken);
+            await SelectSpawnAsync(gameHandle, spawnSlot, cancellationToken);
             await WaitForGameLoadAsync(cancellationToken);
 
             _logger.Info("Auto-login sequence completed successfully");
@@ -169,7 +218,22 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
-    private async Task SelectCharacterAsync(int characterSlot, CancellationToken cancellationToken)
+    /// <summary>
+    /// Clicks a screen position with <paramref name="windowHandle"/> raised first. Falls back to a
+    /// bare click when the window could not be found, which is what this always used to do.
+    /// </summary>
+    private void ClickOnWindow(IntPtr windowHandle, int x, int y)
+    {
+        if (windowHandle == IntPtr.Zero)
+        {
+            _inputService.ClickScreen(x, y);
+            return;
+        }
+
+        _inputService.ClickScreenOnWindow(windowHandle, x, y);
+    }
+
+    private async Task SelectCharacterAsync(IntPtr gameHandle, int characterSlot, CancellationToken cancellationToken)
     {
         // Character 3 is only available if purchased; fall back to slot 1 if not.
         var char3Available = IsPixelColor(
@@ -185,19 +249,19 @@ public sealed class AutoLoginService : IAutoLoginService
         var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character);
 
         _logger.Info($"Selecting character {character}: click ({selectX},{selectY})");
-        _inputService.ClickScreen(selectX, selectY);
+        ClickOnWindow(gameHandle, selectX, selectY);
         await Task.Delay(4000, cancellationToken); // Wait for UI to respond to selection (4s for stability)
 
         _logger.Info($"Confirming character {character}: click ({confirmX},{confirmY})");
-        _inputService.ClickScreen(confirmX, confirmY);
+        ClickOnWindow(gameHandle, confirmX, confirmY);
         await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
     }
 
-    private async Task SelectSpawnAsync(int spawnSlot, CancellationToken cancellationToken)
+    private async Task SelectSpawnAsync(IntPtr gameHandle, int spawnSlot, CancellationToken cancellationToken)
     {
         var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
         _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
-        _inputService.ClickScreen(spawnX, spawnY);
+        ClickOnWindow(gameHandle, spawnX, spawnY);
         await Task.Delay(4000, cancellationToken); // Wait for spawn confirmation to process (4s for stability)
     }
 

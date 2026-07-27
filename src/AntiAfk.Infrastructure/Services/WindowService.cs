@@ -92,6 +92,75 @@ public sealed class WindowService : IWindowService
         return bestMatch;
     }
 
+    public LauncherWindowInfo? FindLauncherWindow()
+    {
+        var processIds = new HashSet<int>();
+        foreach (var process in Process.GetProcessesByName(GameConstants.LauncherProcessName))
+        {
+            using (process)
+            {
+                processIds.Add(process.Id);
+            }
+        }
+
+        LauncherWindowInfo? bestMatch = null;
+        var bestArea = 0L;
+
+        NativeMethods.EnumWindows((hWnd, _) =>
+        {
+            if (!NativeMethods.IsWindowVisible(hWnd))
+            {
+                return true;
+            }
+
+            var title = NativeMethods.GetWindowTitle(hWnd);
+
+            // The game window carries "Majestic" too, and on the launcher path it may already be
+            // up by the time this runs.
+            if (GameTitlePattern.IsMatch(title))
+            {
+                return true;
+            }
+
+            NativeMethods.GetWindowThreadProcessId(hWnd, out var processId);
+            var isLauncher = processIds.Contains((int)processId) ||
+                             title.StartsWith(GameConstants.LauncherTitlePrefix, StringComparison.OrdinalIgnoreCase);
+            if (!isLauncher)
+            {
+                return true;
+            }
+
+            RestoreIfMinimized(hWnd);
+
+            if (!NativeMethods.GetWindowRect(hWnd, out var rect) || !IsRectSane(rect))
+            {
+                return true;
+            }
+
+            var width = rect.Right - rect.Left;
+            var height = rect.Bottom - rect.Top;
+
+            // The launcher process also owns off-screen helper windows; the one worth raising is
+            // the one the user can see.
+            if (width < 200 || height < 200)
+            {
+                return true;
+            }
+
+            var area = (long)width * height;
+            if (area <= bestArea)
+            {
+                return true;
+            }
+
+            bestArea = area;
+            bestMatch = new LauncherWindowInfo(hWnd, title, rect.Left, rect.Top, width, height);
+            return true;
+        }, IntPtr.Zero);
+
+        return bestMatch;
+    }
+
     private static GameWindowInfo? FindByGtaProcess()
     {
         var processIds = Process.GetProcessesByName(GameConstants.GameProcessName)

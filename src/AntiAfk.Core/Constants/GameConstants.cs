@@ -46,4 +46,10 @@ public static class GameConstants
     public const int PreStartTolerance = 40;
 
     public const string GameProcessName = "GTA5";
+
+    // The launcher ships as "Majestic Launcher.exe", so the process name is the file name without
+    // the extension. The title prefix is the fallback for installs pointed at a renamed exe via
+    // the LauncherPath setting, where the process name no longer matches.
+    public const string LauncherProcessName = "Majestic Launcher";
+    public const string LauncherTitlePrefix = "Majestic Launcher";
 }

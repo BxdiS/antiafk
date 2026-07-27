@@ -304,7 +304,7 @@ public sealed class AntiAfkEngine
                 _logger.Info(
                     $"Startup: pre-game menu detected. Clicking to continue " +
                     $"({_coordinates.CenterX},{_coordinates.CenterY}), attempt {preStartClicks}...");
-                _inputService.ClickScreenOnGame(_gameHandle, _coordinates.CenterX, _coordinates.CenterY);
+                _inputService.ClickScreenOnWindow(_gameHandle, _coordinates.CenterX, _coordinates.CenterY);
 
                 // Let the click take effect before deciding whether the menu is still there.
                 await DelaySeconds(3, cancellationToken);
