@@ -90,28 +90,35 @@ public sealed class InputService : IInputService
         Thread.Sleep(200);
     }
 
+    // Nothing may be inserted between the cursor move and the two button events - see the note on
+    // Debug.WriteLine below. Keep this body free of anything that can block or yield.
     public void ClickScreen(int screenX, int screenY)
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Setting cursor position to ({screenX}, {screenY})");
+            // Deliberately no Debug.WriteLine in here.
+            //
+            // There used to be six of them, one before each step. Debug.WriteLine is
+            // [Conditional("DEBUG")], so it compiles away entirely in Release but is very much
+            // present in a Debug build - which is the one difference between the release exe that
+            // clicks correctly and a build run out of Visual Studio that does not.
+            //
+            // Each call is an OutputDebugString. With a debugger attached that raises
+            // DBG_PRINTEXCEPTION_C, and the debugger services it by suspending the process, reading
+            // the string and resuming. Two of those sat directly in front of mouse_event, so every
+            // click carried an unbounded, VS-dependent stall between "cursor is on the target" and
+            // "button goes down" - the window in which the game, or a real mouse, can move the
+            // pointer somewhere else. The fixed 300/100/200 ms below are only meaningful if nothing
+            // else is inserted between them.
+            //
+            // If this ever needs tracing again, log it through IAppLogger before or after the click,
+            // never between the steps.
             System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Cursor set, waiting 300ms for mouse to settle");
-            Thread.Sleep(300); // Increased from 30ms to ensure cursor has time to physically move
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTDOWN");
+            Thread.Sleep(300); // Time for the cursor to physically arrive before the press.
             NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Waiting 100ms between down and up");
-            Thread.Sleep(100); // Increased from 80ms for more natural click duration
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Sending MOUSEEVENTF_LEFTUP");
+            Thread.Sleep(100); // How long a person holds the button down.
             NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-
-            System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Click complete, waiting 200ms before next action");
-            Thread.Sleep(200); // Added delay after click completes to prevent rapid re-positioning
-
+            Thread.Sleep(200); // Nothing repositions the cursor until the game has acted on this.
         }
         catch (Exception ex)
         {
