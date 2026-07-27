@@ -79,7 +79,7 @@ internal static class Program
                     runtime,
                     () => configService.Current.Timings);
                 var gameLauncher = new GameLauncherService(configService, logger);
-                var autoLoginService = new AutoLoginService(logger, screenCapture, inputService);
+                var autoLoginService = new AutoLoginService(logger, screenCapture, inputService, windowService);
                 var progressStore = new EngineProgressStore();
 
                 var engine = new AntiAfkEngine(
@@ -104,6 +104,10 @@ internal static class Program
                 });
 
                 logger.Info($"{AppBranding.DisplayName} started.");
+
+                // Logged up front because every coordinate below depends on it: a display that is
+                // not at 100% scale is the first thing to check when clicks land in the wrong place.
+                DisplayDiagnostics.LogDisplayLayout(logger);
 
                 return new TrayApplicationContext(engineHost, updateService, localization, configService, logger, logConsole);
             }

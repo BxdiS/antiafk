@@ -118,6 +118,16 @@ internal static class NativeMethods
         public int Bottom;
     }
 
+    public const uint MonitorDefaultToNearest = 2;
+    public const int MdtEffectiveDpi = 0;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromRect(ref Rect lprc, uint dwFlags);
+
+    // shcore.dll is Windows 8.1+; the manifest only claims Windows 10/11 support.
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
     [DllImport("user32.dll")]
     public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
 

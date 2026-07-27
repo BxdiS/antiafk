@@ -22,6 +22,8 @@ Checks happen on startup and then every few hours (default 6, configurable in th
 
 Download happens in the background; the tray icon turns blue when there's something to update. Clicking "Update" makes the exe replace itself with the new version and restart; temp files are cleaned up immediately after.
 
+Before any of that the downloaded file is checked against `AntiAFK.exe.sha256` from the same release. If the checksum doesn't match, or the release has no checksum file at all, the update is discarded — the app overwrites itself and runs the result, so "couldn't verify" is not treated as "verified" here.
+
 ## Configuration
 
 Settings are set via tray → **Settings** and don't persist to disk. The structure of config fields is documented in [config.example.json](config.example.json) — it's a reference, not a file the app reads.
@@ -80,6 +82,8 @@ The plan is to get a free signature from [SignPath](https://signpath.org/). The 
 | Symptom | What to check |
 |---------|---------------|
 | Game not found | Need the `GTA5.exe` process or Majestic RP client window with version in the title |
-| Updates aren't coming | Latest release must be published (not draft, not pre-release) and contain `AntiAFK.exe` |
+| Clicks land in the wrong place | The log starts with `Display ...` lines showing each monitor's scale. Anything other than 100% shifts the coordinates — run the game on a 100% display |
+| Engine stopped on its own | After five crashes in a row it stops restarting instead of looping the same failure. The cause is in the log console; Start tries again |
+| Updates aren't coming | Latest release must be published (not draft, not pre-release) and contain `AntiAFK.exe`. Without an `AntiAFK.exe.sha256` next to it the update is discarded as unverifiable |
 | Workflow didn't run | Tag must start with `v` |
 | Settings disappeared after restart | That's by design — portable version keeps nothing between runs |

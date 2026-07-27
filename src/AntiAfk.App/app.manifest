@@ -8,6 +8,12 @@
       </requestedPrivileges>
     </security>
   </trustInfo>
+  <!--
+    Do NOT add <dpiAware>/<dpiAwareness> here. DPI awareness is set through the
+    ApplicationHighDpiMode property in AntiAfk.App.csproj, which is how .NET WinForms expects it
+    to be configured; declaring it in the manifest as well makes WinForms' own DPI handling
+    disagree with the process state and trips analyzer WFAC010.
+  -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
       <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />

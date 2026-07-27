@@ -13,6 +13,18 @@
     <Company>BxdiS</Company>
     <Description>AntiAFK marketplace activity bot</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- DPI awareness is deliberately left at the WinForms default (SystemAware).
+
+         PerMonitorV2 was set here by H-2 on the theory that SystemAware virtualisation was what
+         made clicks land in the wrong place. That was a guess, not a diagnosis - the commit message
+         says "a plausible root cause" - and it changes the meaning of every screen coordinate the
+         app computes, because Cursor.Position, GetWindowRect and CopyFromScreen all switch from
+         virtualised to physical pixels. v1.1.8, which clicks reliably, ran SystemAware, so this is
+         the one coordinate-semantics difference between it and the broken build. Reverted until
+         there is evidence that scaling is actually involved.
+
+         DisplayDiagnostics still logs every monitor's effective scale at startup, so if a non-100%
+         display turns out to be the problem it will be visible in the log rather than guessed at. -->
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Version>1.0.0</Version>
   </PropertyGroup>
