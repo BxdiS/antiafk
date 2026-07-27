@@ -98,13 +98,23 @@ public sealed class SettingsForm : Form
 
     private void LoadValues()
     {
-        _launcherPathText.Text = LauncherPathResolver.Resolve(_workingCopy.LauncherPath)
+        // Only ever show what the user actually configured. Filling the box with the resolved path
+        // meant opening the dialog and pressing Save - changing nothing - turned an empty
+        // LauncherPath, which means "find it automatically", into a hardcoded one. The launcher
+        // then moving or being reinstalled elsewhere would break a setting the user never set.
+        _launcherPathText.Text = _workingCopy.LauncherPath;
+
+        // The auto-detected path is shown as a hint instead, so the box being empty reads as
+        // "using this" rather than "nothing configured".
+        _launcherPathText.PlaceholderText = LauncherPathResolver.Resolve(_workingCopy.LauncherPath)
             ?? LauncherPathResolver.DefaultLauncherPath;
     }
 
     private void SaveButton_Click(object? sender, EventArgs e)
     {
         _workingCopy.Language = _languageCombo.SelectedItem?.ToString() ?? "ru";
+
+        // Empty stays empty: that is the auto-detect mode, not a missing value to fill in.
         _workingCopy.LauncherPath = _launcherPathText.Text.Trim();
 
         _configService.Save(_workingCopy);
