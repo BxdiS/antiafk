@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 
@@ -30,10 +30,11 @@ public sealed class AutoLoginService : IAutoLoginService
         /// Launcher login button. The launcher window spans roughly (410,170)-(1570,907).
         public static readonly (int X, int Y) LoginButton = (950, 487);
 
-        /// Server-connected / character-select indicator, approx. #ff007e.
-        public static readonly (int X, int Y) ServerPixel = (634, 216);
-        public const uint ServerColor = 0xff007e;
-        public const int ServerTolerance = 40;
+        // The server-connected indicator at (634,216) used to be waited on here, and it was the
+        // cause of the launcher path misclicking: it belongs to the screen shown *before* character
+        // select, so it went green while the character tiles were still loading. Nothing waits on
+        // it now - the engine waits for the character-select screen itself, the same way it always
+        // did when the game was already running. Left out rather than left unused.
 
         /// Character-select screen indicator, approx. #e81c5a. If this is already lit when
         /// AutoLoginAsync starts we are past the launcher and GTA5 is already running - the user
@@ -66,6 +67,9 @@ public sealed class AutoLoginService : IAutoLoginService
         public const int HudTolerance = 40;
     }
 
+    /// How long the character-select screen is left alone before the first click.
+    private static readonly TimeSpan CharacterSelectSettle = TimeSpan.FromSeconds(3);
+
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;
     private readonly IInputService _inputService;
@@ -83,59 +87,47 @@ public sealed class AutoLoginService : IAutoLoginService
         _windowService = windowService;
     }
 
+    /// <summary>
+    /// The launcher-only step: wait for its UI, then click login. Nothing else - the engine takes
+    /// over from here and drives the same sequence it uses when the game was already running.
+    /// </summary>
+    public async Task StartLauncherLoginAsync(CancellationToken cancellationToken)
+    {
+        LogScreenGeometry();
+
+        const int waitTimeSeconds = 5;
+        _logger.Info($"Auto-login: waiting {waitTimeSeconds}s for launcher UI to render...");
+        await Task.Delay(TimeSpan.FromSeconds(waitTimeSeconds), cancellationToken);
+
+        _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
+        _inputService.ClickScreen(Coords.LoginButton.X, Coords.LoginButton.Y);
+
+        // Give the launcher a moment to start the game process before the engine begins looking
+        // for its window.
+        await Task.Delay(4000, cancellationToken);
+    }
+
+    /// <summary>
+    /// Character and spawn selection.
+    ///
+    /// There is no branching left in here. This used to choose between two sequences - one for
+    /// arriving from the launcher, one for the game already running - and they drifted: they waited
+    /// on different pixels and only one of them had the game window bound, focused and measured
+    /// first. The caller now guarantees the same preconditions in both cases, so this is one
+    /// sequence with one set of assumptions.
+    /// </summary>
     public async Task AutoLoginAsync(CancellationToken cancellationToken, int characterSlot = 1, int spawnSlot = 1)
     {
         try
         {
-            _logger.Info("Starting auto-login sequence...");
+            _logger.Info("Auto-login: selecting character and spawn...");
             LogScreenGeometry();
 
-            // Note: the launcher is already started by the engine (GameLauncherService)
-            // before this sequence runs, so we do NOT launch it again here.
+            // Settle before the first click, exactly as before.
+            await Task.Delay(CharacterSelectSettle, cancellationToken);
 
-            // Step 0: Check if we're already on the character-select screen. This covers the
-            // case where the script is started mid-flow (e.g. the user already logged in via
-            // the launcher manually).
-            var alreadyAtCharacterSelect = IsPixelColor(
-                Coords.CharacterSelectPixel.X,
-                Coords.CharacterSelectPixel.Y,
-                Coords.CharacterSelectColor,
-                Coords.CharacterSelectTolerance);
-
-            if (alreadyAtCharacterSelect)
-            {
-                // Steps 1-3 are all about getting *to* this screen, so skip them entirely.
-                // Waiting for the server-connection indicator here would poll for a pixel that
-                // belongs to the screen shown before character select, which never comes back.
-                _logger.Info("Character-select screen already detected - skipping launcher login, GTA5 wait and server-connection wait");
-
-                // Let the UI settle before clicking, same as the normal path does.
-                await Task.Delay(3000, cancellationToken);
-            }
-            else
-            {
-                // Step 1: Wait for launcher UI, then click the login button
-                await ClickMajesticLoginAsync(cancellationToken);
-
-                // Step 2: Wait for GTA5.exe process to start
-                await WaitForGTA5Async(cancellationToken);
-
-                // Step 3: Wait until the server-connected / character-select screen appears
-                var reached = await WaitForServerConnectionAsync(cancellationToken);
-                if (!reached)
-                {
-                    _logger.Warning("Auto-login: character-select screen not detected; skipping automated selection");
-                    return;
-                }
-            }
-
-            // Step 4: Character selection (1 of 3)
             await SelectCharacterAsync(characterSlot, cancellationToken);
-
-            // Step 5: Spawn selection
             await SelectSpawnAsync(spawnSlot, cancellationToken);
-
-            // Step 6: Wait for the in-game HUD (fully loaded)
             await WaitForGameLoadAsync(cancellationToken);
 
             _logger.Info("Auto-login sequence completed successfully");
@@ -147,8 +139,8 @@ public sealed class AutoLoginService : IAutoLoginService
         }
         catch (Exception ex)
         {
-            // Do not rethrow: the engine awaits this and should continue to bind
-            // the game window and run its own state recovery even if login partially fails.
+            // Not rethrown: the engine awaits this and should still run its own state recovery even
+            // if login only partly succeeded.
             _logger.Error("Auto-login failed", ex);
         }
     }
@@ -168,77 +160,6 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
-    private async Task ClickMajesticLoginAsync(CancellationToken cancellationToken)
-    {
-        // Launcher was already started by the engine. Give the UI time to render,
-        // then click the login button. (Launcher window: 410,170 -> 1570,907)
-        const int waitTimeSeconds = 5;
-        _logger.Info($"Auto-login: waiting {waitTimeSeconds}s for launcher UI to render...");
-
-        for (int i = 0; i < waitTimeSeconds; i++)
-        {
-            await Task.Delay(1000, cancellationToken);
-        }
-
-        _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
-        _inputService.ClickScreen(Coords.LoginButton.X, Coords.LoginButton.Y);
-        await Task.Delay(4000, cancellationToken); // Wait for game process to launch (4s)
-    }
-
-    private async Task WaitForGTA5Async(CancellationToken cancellationToken)
-    {
-        // Wait for GTA5.exe process (up to 5 minutes)
-        const int maxAttempts = 300;
-        var attempts = 0;
-
-        _logger.Info("Auto-login: waiting for GTA5.exe to start...");
-
-        while (Process.GetProcessesByName("GTA5").Length == 0 && attempts < maxAttempts)
-        {
-            await Task.Delay(1000, cancellationToken);
-            attempts++;
-            LogWaitProgress("GTA5.exe", attempts, maxAttempts);
-        }
-
-        if (attempts >= maxAttempts)
-        {
-            _logger.Warning("GTA5.exe did not start within timeout (5 minutes)");
-        }
-        else
-        {
-            _logger.Info("GTA5.exe started");
-        }
-    }
-
-    private async Task<bool> WaitForServerConnectionAsync(CancellationToken cancellationToken)
-    {
-        // Wait for the server-connected / character-select indicator. Once it is lit we can
-        // start selecting a character.
-        var attempts = 0;
-        const int maxAttempts = 300; // up to 5 minutes
-
-        _logger.Info($"Auto-login: waiting for server connection (pixel {Coords.ServerPixel.X},{Coords.ServerPixel.Y})...");
-
-        while (attempts < maxAttempts)
-        {
-            if (IsPixelColor(Coords.ServerPixel.X, Coords.ServerPixel.Y, Coords.ServerColor, Coords.ServerTolerance))
-            {
-                _logger.Info("Server connection / character-select screen detected");
-                // Let the UI stabilise before we start clicking (3s for slow connections)
-                await Task.Delay(3000, cancellationToken);
-                return true;
-            }
-
-            await Task.Delay(1000, cancellationToken);
-            attempts++;
-            LogWaitProgress("server connection", attempts, maxAttempts);
-        }
-
-        _logger.Warning("Server connection indicator not detected within timeout (5 minutes)");
-        return false;
-    }
-
-    // Long polling loops are otherwise completely silent, which is indistinguishable from a hang.
     private void LogWaitProgress(string what, int attempts, int maxAttempts)
     {
         const int logEverySeconds = 15;

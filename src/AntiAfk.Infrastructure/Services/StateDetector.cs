@@ -1,4 +1,4 @@
-using AntiAfk.Core.Abstractions;
+﻿using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
@@ -104,6 +104,29 @@ public sealed class StateDetector : IStateDetector
         catch (Exception ex)
         {
             _logger.Warning($"IsAtCharacterSelect: failed to read pixel ({ex.Message}).");
+            return false;
+        }
+    }
+
+    public bool IsInGame()
+    {
+        var coords = _runtime.Coordinates;
+        if (coords is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var (r, g, b) = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
+
+            // Same test as the HUD branch of SmartStateRecovery. Character select shares this
+            // accent colour, so callers must rule that out first - IsAtCharacterSelect does it.
+            return r >= 200 && g <= 60 && b is >= 80 and <= 170;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"IsInGame: failed to read pixel ({ex.Message}).");
             return false;
         }
     }
