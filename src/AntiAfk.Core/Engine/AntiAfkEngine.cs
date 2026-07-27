@@ -1,4 +1,4 @@
-using AntiAfk.Core.Abstractions;
+﻿using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
 using AntiAfk.Core.Services;
@@ -16,6 +16,13 @@ public sealed class AntiAfkEngine
     private readonly EngineRuntime _runtime;
     private readonly IAutoLoginService? _autoLoginService;
     private readonly Random _random = new();
+
+    /// How long startup will wait for the game to reach character select or the world. Covers a
+    /// cold GTA5 start and a slow server, which is what the launcher path has to sit through.
+    private static readonly TimeSpan PlayableStateTimeout = TimeSpan.FromMinutes(6);
+
+    /// Clicks spent trying to dismiss the pre-game menu before concluding the button is elsewhere.
+    private const int MaxPreStartClicks = 3;
 
     private IntPtr _gameHandle;
     private UserWindowInfo? _userWindow;
@@ -141,16 +148,20 @@ public sealed class AntiAfkEngine
             return false;
         }
 
-        // Run the auto-login sequence to completion BEFORE we bind the window and
-        // hand off to startup recovery. Doing this sequentially (not fire-and-forget)
-        // prevents a race where SmartStateRecovery tries to open the marketplace while
-        // the player is still on the launcher / character-select screen.
+        // Click the launcher's login button, and nothing more. This is the only step unique to
+        // starting from the launcher.
+        //
+        // This used to run the whole login here - character selection included - before the game
+        // window had been found, bound, measured or focused. That is exactly why starting from the
+        // launcher behaved differently from starting with the game already running: the other path
+        // gets all of that from RunStartupRecoveryAsync first. Now both paths fall through to the
+        // same place and the sequence is identical from here on.
         if (_autoLoginService is not null)
         {
-            _logger.Info("Running auto-login sequence...");
+            _logger.Info("Clicking the launcher login button...");
             try
             {
-                await _autoLoginService.AutoLoginAsync(cancellationToken);
+                await _autoLoginService.StartLauncherLoginAsync(cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -158,7 +169,7 @@ public sealed class AntiAfkEngine
             }
             catch (Exception ex)
             {
-                _logger.Error("Auto-login sequence failed", ex);
+                _logger.Error("Launcher login failed", ex);
             }
         }
         else
@@ -228,6 +239,12 @@ public sealed class AntiAfkEngine
         _windowService.ForceForeground(_gameHandle);
         await DelaySeconds(_configService.Current.Timings.InitFocusDelay, cancellationToken);
 
+        // The game window exists well before the game is ready - coming from the launcher it turns
+        // up while the client is still connecting. Wait until the screen is one we can act on
+        // rather than acting on a loading screen, which is what pushed the game into the tablet
+        // instead of selecting a character.
+        await WaitForPlayableStateAsync(cancellationToken);
+
         // The game may already be running but still sitting on the character-select screen
         // (e.g. the user logged in manually, or started the app mid-flow). In that case the
         // launcher path in EnsureGameWindowAsync was skipped, so auto-login has not run yet.
@@ -239,6 +256,73 @@ public sealed class AntiAfkEngine
         NormalizeBackgroundPhaseAfterRecovery();
 
         _logger.Info($"Engine ready. Resuming from phase: {_progress.Phase}");
+    }
+
+    /// <summary>
+    /// Waits until the game is either at character select or in the world.
+    ///
+    /// Returns at once in the common restart case, where it is already one of the two. It only
+    /// actually waits when the game is still starting, which is precisely the case the launcher
+    /// path used to get wrong by clicking anyway.
+    /// </summary>
+    private async Task WaitForPlayableStateAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + PlayableStateTimeout;
+        var announced = false;
+        var preStartClicks = 0;
+
+        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
+        {
+            // Character select first: it shares its accent colour with the HUD pixel, so the
+            // in-game test reports a false positive on it.
+            if (_stateDetector.IsAtCharacterSelect())
+            {
+                _logger.Info("Startup: character-select screen is up.");
+                return;
+            }
+
+            if (_stateDetector.IsInGame())
+            {
+                _logger.Info("Startup: already in the world.");
+                return;
+            }
+
+            // The menu between connecting and character select does not advance on its own - it
+            // waits for a click. Waiting for character select without dismissing it first is
+            // waiting for something that will never happen.
+            if (_stateDetector.IsAtPreStartMenu() && _coordinates is not null)
+            {
+                if (preStartClicks >= MaxPreStartClicks)
+                {
+                    _logger.Warning(
+                        $"Startup: pre-game menu is still up after {MaxPreStartClicks} clicks at " +
+                        $"({_coordinates.CenterX},{_coordinates.CenterY}). The button is probably somewhere else.");
+                    return;
+                }
+
+                preStartClicks++;
+                _logger.Info(
+                    $"Startup: pre-game menu detected. Clicking to continue " +
+                    $"({_coordinates.CenterX},{_coordinates.CenterY}), attempt {preStartClicks}...");
+                _inputService.ClickScreenOnGame(_gameHandle, _coordinates.CenterX, _coordinates.CenterY);
+
+                // Let the click take effect before deciding whether the menu is still there.
+                await DelaySeconds(3, cancellationToken);
+                continue;
+            }
+
+            if (!announced)
+            {
+                announced = true;
+                _logger.Info("Startup: game is still loading. Waiting for character select or the HUD...");
+            }
+
+            await DelaySeconds(1, cancellationToken);
+        }
+
+        _logger.Warning(
+            $"Startup: neither character select nor the HUD appeared within {PlayableStateTimeout.TotalMinutes:F0} " +
+            "minutes. Continuing anyway.");
     }
 
     private void NormalizeBackgroundPhaseAfterRecovery()

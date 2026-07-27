@@ -1,4 +1,4 @@
-using AntiAfk.Core.Constants;
+﻿using AntiAfk.Core.Constants;
 using AntiAfk.Core.Models;
 
 namespace AntiAfk.Core.Services;
@@ -27,6 +27,7 @@ public static class CoordinateScaler
         var mapPixel = ScaleToScreen(GameConstants.BaseMapPixel.X, GameConstants.BaseMapPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var hudPixel = ScaleToScreen(GameConstants.BaseHudPixel.X, GameConstants.BaseHudPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var mpPixel = ScaleToScreen(GameConstants.BaseMpPixel.X, GameConstants.BaseMpPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
+        var preStartPixel = ScaleToScreen(GameConstants.BasePreStartPixel.X, GameConstants.BasePreStartPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var charSelectPixel = ScaleToScreen(GameConstants.BaseCharSelectPixel.X, GameConstants.BaseCharSelectPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var center = ScaleToScreen(GameConstants.BaseCenterX, GameConstants.BaseCenterY, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var icon = ScaleToScreen(GameConstants.BaseIconX, GameConstants.BaseIconY, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
@@ -54,6 +55,8 @@ public static class CoordinateScaler
             HudPixelY = hudPixel.Y,
             MpPixelX = mpPixel.X,
             MpPixelY = mpPixel.Y,
+            PreStartPixelX = preStartPixel.X,
+            PreStartPixelY = preStartPixel.Y,
             CharSelectPixelX = charSelectPixel.X,
             CharSelectPixelY = charSelectPixel.Y
         };
