@@ -1,4 +1,4 @@
-using AntiAfk.Core.Abstractions;
+﻿using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
@@ -27,7 +27,7 @@ public sealed class StateDetector : IStateDetector
         _timingsProvider = timingsProvider;
     }
 
-    public bool CheckAndCloseWarning()
+    public async Task<bool> CheckAndCloseWarningAsync(CancellationToken cancellationToken)
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
@@ -55,11 +55,11 @@ public sealed class StateDetector : IStateDetector
 
         _logger.Warning($"Warehouse notification detected. Clicking ({coords.WarnClickX}, {coords.WarnClickY})...");
         _inputService.ClickScreenOnGame(gameHandle, coords.WarnClickX, coords.WarnClickY);
-        Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().WarningClickDelay));
+        await Task.Delay(TimeSpan.FromSeconds(_timingsProvider().WarningClickDelay), cancellationToken);
         return true;
     }
 
-    public bool CheckAndCloseMap()
+    public async Task<bool> CheckAndCloseMapAsync(CancellationToken cancellationToken)
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
@@ -79,7 +79,7 @@ public sealed class StateDetector : IStateDetector
         {
             _logger.Warning("Map menu detected. Closing with ESC...");
             _inputService.SendKeyToGame(gameHandle, NativeKeys.Escape, 0.1);
-            Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().MapCloseDelay));
+            await Task.Delay(TimeSpan.FromSeconds(_timingsProvider().MapCloseDelay), cancellationToken);
             return true;
         }
 
@@ -108,7 +108,7 @@ public sealed class StateDetector : IStateDetector
         }
     }
 
-    public void SmartStateRecovery()
+    public async Task SmartStateRecoveryAsync(CancellationToken cancellationToken)
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var timings = _timingsProvider();
@@ -145,7 +145,7 @@ public sealed class StateDetector : IStateDetector
         if (rMp is >= 15 and <= 50 && gMp is >= 45 and <= 90 && bMp is >= 85 and <= 130)
         {
             _logger.Info("Status: Marketplace open but overlay present. Closing overlay...");
-            CheckAndCloseWarning();
+            await CheckAndCloseWarningAsync(cancellationToken);
             return;
         }
 
@@ -158,26 +158,30 @@ public sealed class StateDetector : IStateDetector
         if (rHud >= 200 && gHud <= 60 && bHud is >= 80 and <= 170)
         {
             _logger.Info("Status: In game. Opening tablet and marketplace...");
-            OpenMarketplace(gameHandle, coords, timings);
+            await OpenMarketplaceAsync(gameHandle, coords, timings, cancellationToken);
             return;
         }
 
         _logger.Warning($"Status: Unknown (HUD: {rHud},{gHud},{bHud} | MP: {rMp},{gMp},{bMp}). Trying default open...");
-        OpenMarketplace(gameHandle, coords, timings);
+        await OpenMarketplaceAsync(gameHandle, coords, timings, cancellationToken);
     }
 
-    private void OpenMarketplace(IntPtr gameHandle, ScaledCoordinates coords, TimingSettings timings)
+    private async Task OpenMarketplaceAsync(
+        IntPtr gameHandle,
+        ScaledCoordinates coords,
+        TimingSettings timings,
+        CancellationToken cancellationToken)
     {
         _logger.Info("Opening tablet (Down arrow)...");
         _inputService.SendKeyToGame(gameHandle, NativeKeys.Down, 0.1);
-        Thread.Sleep(TimeSpan.FromSeconds(timings.TabletOpenDelay));
+        await Task.Delay(TimeSpan.FromSeconds(timings.TabletOpenDelay), cancellationToken);
         _logger.Info($"Clicking center ({coords.CenterX}, {coords.CenterY})...");
         _inputService.ClickScreenOnGame(gameHandle, coords.CenterX, coords.CenterY);
-        Thread.Sleep(TimeSpan.FromSeconds(1.0));
+        await Task.Delay(TimeSpan.FromSeconds(1.0), cancellationToken);
         _logger.Info($"Clicking marketplace icon ({coords.IconX}, {coords.IconY})...");
         _inputService.ClickScreenOnGame(gameHandle, coords.IconX, coords.IconY);
-        Thread.Sleep(TimeSpan.FromSeconds(timings.MarketplaceOpenDelay));
-        CheckAndCloseWarning();
+        await Task.Delay(TimeSpan.FromSeconds(timings.MarketplaceOpenDelay), cancellationToken);
+        await CheckAndCloseWarningAsync(cancellationToken);
     }
 
     private IntPtr RequireGameHandle()
