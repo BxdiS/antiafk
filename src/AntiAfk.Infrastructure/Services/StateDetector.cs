@@ -98,8 +98,16 @@ public sealed class StateDetector : IStateDetector
 
         switch (screen)
         {
+            // Neither of these is in the world, so there is no tablet to open and no marketplace to
+            // recover. Falling through to the default open on ConnectingToServer is what pushed the
+            // game into the tablet while it was still connecting, instead of letting the login flow
+            // reach character select.
             case GameScreen.CharacterSelect:
                 _logger.Info("Status: character-select screen. Not in game yet - skipping tablet/marketplace.");
+                return;
+
+            case GameScreen.ConnectingToServer:
+                _logger.Info("Status: connecting to the server. Not in game yet - skipping tablet/marketplace.");
                 return;
 
             case GameScreen.MarketplaceWarning:

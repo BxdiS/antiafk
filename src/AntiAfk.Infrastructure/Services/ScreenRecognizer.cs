@@ -17,7 +17,9 @@ public sealed class ScreenRecognizer : IScreenRecognizer
     private readonly IScreenCaptureService _screenCapture;
     private readonly IAppLogger _logger;
 
-    private GameScreen _lastReported = GameScreen.Unknown;
+    // Null rather than Unknown, so the very first recognition is logged even when it is Unknown.
+    // Seeded with Unknown, the opening state of every session went unreported.
+    private GameScreen? _lastReported;
     private string _lastReadFailure = string.Empty;
 
     public ScreenRecognizer(IScreenCaptureService screenCapture, IAppLogger logger)
