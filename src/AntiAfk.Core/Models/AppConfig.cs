@@ -39,26 +39,6 @@ public sealed class TimingSettings
     public double PostTurnDelay { get; set; } = 0.5;
     public double PostWalkDelay { get; set; } = 0.2;
 
-    // Cursor is parked on the target for this long before the button goes down, so the target has
-    // registered the hover and nothing is still animating under it.
-    public double CursorArrivalSettle { get; set; } = 5.0;
-
-    // The game's UI acts on the release, not the press, so this is the wait that matters: nothing
-    // may move the cursor until the game has processed the click it just received.
-    public double PostClickCursorHold { get; set; } = 5.0;
-
-    // How long the button stays down. This is not a cooldown - it is just how long a person holds a
-    // button for, so it is short and randomised rather than a fixed value.
-    public RandomRange ClickHoldDuration { get; set; } = new(0.04, 0.09);
-
-    // After the release the UI needs a mouse-move before it commits the click. A release followed
-    // straight by a jump to the next button gets dropped, so the cursor is wiggled a couple of
-    // pixels sideways and back, staying inside the same control. Zero disables the wiggle.
-    public int PostClickNudgePixels { get; set; } = 3;
-
-    // Pause after each of the two wiggle moves.
-    public double PostClickNudgeDelay { get; set; } = 0.15;
-
     public static TimingSettings CreateDefault() => new();
 }
 

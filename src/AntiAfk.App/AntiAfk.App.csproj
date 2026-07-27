@@ -13,18 +13,18 @@
     <Company>BxdiS</Company>
     <Description>AntiAFK marketplace activity bot</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- Every coordinate this app works with is a physical screen pixel: it reads pixels via
-         CopyFromScreen, positions the cursor via Cursor.Position and measures the game window via
-         GetWindowRect. The WinForms default is SystemAware, under which Windows virtualises those
-         coordinates on any display not at the system scale - so what the app computes and where
-         the click lands drift apart. That is worst in a mixed-DPI setup, where moving a window
-         between monitors changes the effective scale.
+    <!-- DPI awareness is deliberately left at the WinForms default (SystemAware).
 
-         PerMonitorV2 opts out of that virtualisation, so the app sees real pixels on every
-         monitor. At 100% scale nothing changes, which is the common case for a fullscreen game.
-         This belongs here rather than in app.manifest: .NET WinForms manages DPI itself, and
-         declaring it in the manifest instead makes the two disagree (analyzer WFAC010). -->
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+         PerMonitorV2 was set here by H-2 on the theory that SystemAware virtualisation was what
+         made clicks land in the wrong place. That was a guess, not a diagnosis - the commit message
+         says "a plausible root cause" - and it changes the meaning of every screen coordinate the
+         app computes, because Cursor.Position, GetWindowRect and CopyFromScreen all switch from
+         virtualised to physical pixels. v1.1.8, which clicks reliably, ran SystemAware, so this is
+         the one coordinate-semantics difference between it and the broken build. Reverted until
+         there is evidence that scaling is actually involved.
+
+         DisplayDiagnostics still logs every monitor's effective scale at startup, so if a non-100%
+         display turns out to be the problem it will be visible in the log rather than guessed at. -->
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Version>1.0.0</Version>
   </PropertyGroup>

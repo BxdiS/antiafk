@@ -427,45 +427,6 @@ public sealed class WindowService : IWindowService
         return true;
     }
 
-    public IntPtr FindMainWindowByProcess(string processName)
-    {
-        Process[] processes;
-        try
-        {
-            processes = Process.GetProcessesByName(processName);
-        }
-        catch (InvalidOperationException)
-        {
-            return IntPtr.Zero;
-        }
-
-        try
-        {
-            foreach (var process in processes)
-            {
-                // Zero while the process is still starting up and has not created its window yet.
-                var handle = process.MainWindowHandle;
-                if (handle != IntPtr.Zero && NativeMethods.IsWindow(handle))
-                {
-                    return handle;
-                }
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Process exited between enumeration and the handle read.
-        }
-        finally
-        {
-            foreach (var process in processes)
-            {
-                process.Dispose();
-            }
-        }
-
-        return IntPtr.Zero;
-    }
-
     public (int Width, int Height) GetScreenSize()
     {
         var bounds = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);

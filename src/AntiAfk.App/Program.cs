@@ -70,7 +70,7 @@ internal static class Program
 
                 var runtime = new EngineRuntime();
                 var windowService = new WindowService();
-                var inputService = new InputService(windowService, logger, () => configService.Current.Timings);
+                var inputService = new InputService(windowService);
                 var screenCapture = new ScreenCaptureService();
                 var stateDetector = new StateDetector(
                     screenCapture,
