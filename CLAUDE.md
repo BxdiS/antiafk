@@ -14,6 +14,8 @@ gh pr create --title "Your PR Title" --body "..." --head your-branch --base main
 
 The description should say what changed and why. A list of touched files isn't a description.
 
+**Never add tool attribution lines** like "🤖 Generated with Claude Code" or "Co-authored-by: Claude Fable 5" or similar metadata. Focus on the technical content — what the code does, why it matters, and any relevant context. No AI or tool branding in commits or PR descriptions.
+
 Once it's merged, clean up:
 
 ```bash
@@ -43,3 +45,5 @@ This file (CLAUDE.md) itself should stay current if the workflow changes.
 ## Tooling
 
 Needs `git` and `gh` on PATH, with `gh` authenticated (`gh auth login`, or a `GITHUB_TOKEN` in the environment). If something's missing, say so instead of working around it.
+
+GitHub CLI is installed at: `C:\Program Files\GitHub CLI\gh.exe`
