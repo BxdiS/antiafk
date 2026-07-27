@@ -4,6 +4,12 @@ public interface IStateDetector
 {
     bool CheckAndCloseWarning();
     bool CheckAndCloseMap();
+    /// <summary>
+    /// True on the menu shown after connecting and before character select. It waits for a click
+    /// and does not advance on its own.
+    /// </summary>
+    bool IsAtPreStartMenu();
+
     bool IsAtCharacterSelect();
 
     /// <summary>

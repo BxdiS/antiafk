@@ -86,6 +86,28 @@ public sealed class StateDetector : IStateDetector
         return false;
     }
 
+    public bool IsAtPreStartMenu()
+    {
+        var coords = _runtime.Coordinates;
+        if (coords is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var (r, g, b) = _screenCapture.GetPixelColor(coords.PreStartPixelX, coords.PreStartPixelY);
+            return Math.Abs(r - GameConstants.PreStartR) <= GameConstants.PreStartTolerance
+                && Math.Abs(g - GameConstants.PreStartG) <= GameConstants.PreStartTolerance
+                && Math.Abs(b - GameConstants.PreStartB) <= GameConstants.PreStartTolerance;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"IsAtPreStartMenu: failed to read pixel ({ex.Message}).");
+            return false;
+        }
+    }
+
     public bool IsAtCharacterSelect()
     {
         var coords = _runtime.Coordinates;

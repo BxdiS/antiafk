@@ -21,6 +21,9 @@ public sealed class AntiAfkEngine
     /// cold GTA5 start and a slow server, which is what the launcher path has to sit through.
     private static readonly TimeSpan PlayableStateTimeout = TimeSpan.FromMinutes(6);
 
+    /// Clicks spent trying to dismiss the pre-game menu before concluding the button is elsewhere.
+    private const int MaxPreStartClicks = 3;
+
     private IntPtr _gameHandle;
     private UserWindowInfo? _userWindow;
     private UserWindowInfo? _pendingUserWindow;
@@ -266,6 +269,7 @@ public sealed class AntiAfkEngine
     {
         var deadline = DateTime.UtcNow + PlayableStateTimeout;
         var announced = false;
+        var preStartClicks = 0;
 
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
@@ -281,6 +285,30 @@ public sealed class AntiAfkEngine
             {
                 _logger.Info("Startup: already in the world.");
                 return;
+            }
+
+            // The menu between connecting and character select does not advance on its own - it
+            // waits for a click. Waiting for character select without dismissing it first is
+            // waiting for something that will never happen.
+            if (_stateDetector.IsAtPreStartMenu() && _coordinates is not null)
+            {
+                if (preStartClicks >= MaxPreStartClicks)
+                {
+                    _logger.Warning(
+                        $"Startup: pre-game menu is still up after {MaxPreStartClicks} clicks at " +
+                        $"({_coordinates.CenterX},{_coordinates.CenterY}). The button is probably somewhere else.");
+                    return;
+                }
+
+                preStartClicks++;
+                _logger.Info(
+                    $"Startup: pre-game menu detected. Clicking to continue " +
+                    $"({_coordinates.CenterX},{_coordinates.CenterY}), attempt {preStartClicks}...");
+                _inputService.ClickScreenOnGame(_gameHandle, _coordinates.CenterX, _coordinates.CenterY);
+
+                // Let the click take effect before deciding whether the menu is still there.
+                await DelaySeconds(3, cancellationToken);
+                continue;
             }
 
             if (!announced)

@@ -1,4 +1,4 @@
-namespace AntiAfk.Core.Constants;
+﻿namespace AntiAfk.Core.Constants;
 
 public static class GameConstants
 {
@@ -34,6 +34,16 @@ public static class GameConstants
     public const byte CharSelectG = 0x1C;
     public const byte CharSelectB = 0x5A;
     public const int CharSelectTolerance = 40;
+
+    // The menu shown once the client has connected and before character select. It sits there
+    // waiting for a click to continue - nothing happens on its own. This pixel was previously
+    // treated as a "server connected, safe to click characters" signal, which it is not: it means
+    // this menu is up, and the character tiles only appear after it has been dismissed.
+    public static readonly (int X, int Y) BasePreStartPixel = (634, 216);
+    public const byte PreStartR = 0xFF;
+    public const byte PreStartG = 0x00;
+    public const byte PreStartB = 0x7E;
+    public const int PreStartTolerance = 40;
 
     public const string GameProcessName = "GTA5";
 }
