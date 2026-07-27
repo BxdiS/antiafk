@@ -189,8 +189,9 @@ public sealed class TrayApplicationContext : ApplicationContext
             await _engineHost.StopAsync();
         }
 
+        // Hiding it takes the icon out of the tray straight away. Disposing it is left to
+        // Dispose(bool), which Application.Run calls on the context once the loop exits.
         _notifyIcon.Visible = false;
-        _notifyIcon.Dispose();
         _engineHost.Dispose();
         _updateService.Dispose();
         _logConsole.Close();

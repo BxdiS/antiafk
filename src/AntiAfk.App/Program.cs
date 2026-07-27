@@ -31,7 +31,7 @@ internal static class Program
         if (!createdNew)
         {
             MessageBox.Show(
-                $"{AppBranding.DisplayName} is already running.",
+                CreateLocalization().Get("notify.already_running"),
                 AppBranding.DisplayName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -52,6 +52,15 @@ internal static class Program
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
+    }
+
+    // The single-instance check runs before any service exists, so it builds its own localization
+    // rather than showing an English string the translation table already has a key for.
+    private static LocalizationService CreateLocalization()
+    {
+        var localization = new LocalizationService();
+        localization.SetLanguage(new ConfigService().Current.Language);
+        return localization;
     }
 
     private static TrayApplicationContext CreateContext()

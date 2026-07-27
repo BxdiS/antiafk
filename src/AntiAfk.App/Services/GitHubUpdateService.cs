@@ -169,6 +169,9 @@ public sealed class GitHubUpdateService : IUpdateService
             var remoteVersionText = release.TagName.TrimStart('v', 'V');
             if (!Version.TryParse(remoteVersionText, out var remoteVersion))
             {
+                // Used to return silently. A tag that does not parse means the latest release is
+                // never offered, and nothing said why.
+                _logger.Warning($"Release tag \"{release.TagName}\" is not a version; ignoring this release.");
                 return;
             }
 

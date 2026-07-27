@@ -196,19 +196,21 @@ public sealed class AntiAfkEngine
 
     /// <summary>
     /// Runs the auto-login sequence if the game is sitting on the character-select screen.
-    /// Returns true when a login was attempted, so the caller can re-check the outcome.
+    /// Returns null when there was nothing to do, otherwise how the login went.
     /// </summary>
-    private async Task<bool> RunAutoLoginIfAtCharacterSelectAsync(string context, CancellationToken cancellationToken)
+    private async Task<AutoLoginResult?> RunAutoLoginIfAtCharacterSelectAsync(string context, CancellationToken cancellationToken)
     {
         if (_autoLoginService is null || !_stateDetector.IsAtCharacterSelect())
         {
-            return false;
+            return null;
         }
 
         _logger.Info($"{context}: character-select screen detected. Running auto-login...");
+
+        AutoLoginResult result;
         try
         {
-            await _autoLoginService.AutoLoginAsync(cancellationToken);
+            result = await _autoLoginService.AutoLoginAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -217,9 +219,17 @@ public sealed class AntiAfkEngine
         catch (Exception ex)
         {
             _logger.Error("Auto-login sequence failed", ex);
+            result = AutoLoginResult.Failed;
         }
 
-        return true;
+        if (result == AutoLoginResult.Failed)
+        {
+            _logger.Warning(
+                $"{context}: auto-login did not complete. The game is probably still at character " +
+                "select, so anything that follows is working on an unknown screen.");
+        }
+
+        return result;
     }
 
     private void BindGameWindow(GameWindowInfo game)
@@ -508,7 +518,7 @@ public sealed class AntiAfkEngine
                 // window ever closing, so EnsureGameWindowAsync never notices and startup recovery
                 // never re-arms. Log back in here, otherwise the cycle keeps firing marketplace
                 // clicks into the character-select screen.
-                if (await RunAutoLoginIfAtCharacterSelectAsync("Cycle", cancellationToken))
+                if (await RunAutoLoginIfAtCharacterSelectAsync("Cycle", cancellationToken) is not null)
                 {
                     if (_stateDetector.IsAtCharacterSelect())
                     {
