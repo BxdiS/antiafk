@@ -1,4 +1,4 @@
-namespace AntiAfk.Core.Constants;
+﻿namespace AntiAfk.Core.Constants;
 
 public static class GameConstants
 {
@@ -36,4 +36,7 @@ public static class GameConstants
     public const int CharSelectTolerance = 40;
 
     public const string GameProcessName = "GTA5";
+
+    // Process name (no extension) of "Majestic Launcher.exe".
+    public const string LauncherProcessName = "Majestic Launcher";
 }

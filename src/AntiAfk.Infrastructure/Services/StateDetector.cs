@@ -1,13 +1,15 @@
-using AntiAfk.Core.Abstractions;
+﻿using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
+using AntiAfk.Core.Screens;
 
 namespace AntiAfk.Infrastructure.Services;
 
 public sealed class StateDetector : IStateDetector
 {
     private readonly IScreenCaptureService _screenCapture;
+    private readonly IScreenRecognizer _recognizer;
     private readonly IInputService _inputService;
     private readonly IAppLogger _logger;
     private readonly EngineRuntime _runtime;
@@ -15,12 +17,14 @@ public sealed class StateDetector : IStateDetector
 
     public StateDetector(
         IScreenCaptureService screenCapture,
+        IScreenRecognizer recognizer,
         IInputService inputService,
         IAppLogger logger,
         EngineRuntime runtime,
         Func<TimingSettings> timingsProvider)
     {
         _screenCapture = screenCapture;
+        _recognizer = recognizer;
         _inputService = inputService;
         _logger = logger;
         _runtime = runtime;
@@ -61,51 +65,22 @@ public sealed class StateDetector : IStateDetector
 
     public bool CheckAndCloseMap()
     {
-        var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
 
-        byte r, g, b;
-        try
+        if (_recognizer.Recognize() != GameScreen.MapOpen)
         {
-            (r, g, b) = _screenCapture.GetPixelColor(coords.MapPixelX, coords.MapPixelY);
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning($"CheckAndCloseMap: failed to read pixel ({ex.Message}). Skipping.");
             return false;
         }
 
-        if (r > 200 && g < 40 && b is >= 80 and <= 140)
-        {
-            _logger.Warning("Map menu detected. Closing with ESC...");
-            _inputService.SendKeyToGame(gameHandle, NativeKeys.Escape, 0.1);
-            Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().MapCloseDelay));
-            return true;
-        }
-
-        return false;
+        _logger.Warning("Map menu detected. Closing with ESC...");
+        _inputService.SendKeyToGame(gameHandle, NativeKeys.Escape, 0.1);
+        Thread.Sleep(TimeSpan.FromSeconds(_timingsProvider().MapCloseDelay));
+        return true;
     }
 
     public bool IsAtCharacterSelect()
     {
-        var coords = _runtime.Coordinates;
-        if (coords is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            var (r, g, b) = _screenCapture.GetPixelColor(coords.CharSelectPixelX, coords.CharSelectPixelY);
-            return Math.Abs(r - GameConstants.CharSelectR) <= GameConstants.CharSelectTolerance
-                && Math.Abs(g - GameConstants.CharSelectG) <= GameConstants.CharSelectTolerance
-                && Math.Abs(b - GameConstants.CharSelectB) <= GameConstants.CharSelectTolerance;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning($"IsAtCharacterSelect: failed to read pixel ({ex.Message}).");
-            return false;
-        }
+        return _recognizer.Recognize() == GameScreen.CharacterSelect;
     }
 
     public void SmartStateRecovery()
@@ -114,56 +89,43 @@ public sealed class StateDetector : IStateDetector
         var timings = _timingsProvider();
         var gameHandle = RequireGameHandle();
 
-        _logger.Info("Analyzing UI state...");
+        // One recognise call, one decision. This used to read two pixels itself and compare them
+        // against channel ranges written inline, duplicating what ScreenCatalogue already says -
+        // including the ordering rule that character select must be tested before the HUD, because
+        // the two share the same accent colour. Two copies of that rule is one too many, and the
+        // catalogue now owns it.
+        var screen = _recognizer.Recognize();
 
-        (byte r, byte g, byte b) hud;
-        (byte r, byte g, byte b) mp;
-        try
+        switch (screen)
         {
-            hud = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
-            mp = _screenCapture.GetPixelColor(coords.MpPixelX, coords.MpPixelY);
-        }
-        catch (Exception ex)
-        {
-            // Coordinates can be transiently invalid right after the game window
-            // moves/resizes/minimizes. Skip this recovery pass instead of crashing the engine.
-            _logger.Warning($"SmartStateRecovery: failed to read screen state ({ex.Message}). Skipping this pass.");
-            return;
-        }
+            case GameScreen.CharacterSelect:
+                _logger.Info("Status: character-select screen. Not in game yet - skipping tablet/marketplace.");
+                return;
 
-        var (rHud, gHud, bHud) = hud;
-        var (rMp, gMp, bMp) = mp;
+            case GameScreen.MarketplaceWarning:
+                _logger.Info("Status: marketplace open with an overlay. Closing it...");
+                CheckAndCloseWarning();
+                return;
 
-        // Must be checked before the HUD branch: the character-select screen uses the same pink
-        // accent colour as the in-game HUD pixel, so the HUD check alone reports a false "In game".
-        if (IsAtCharacterSelect())
-        {
-            _logger.Info("Status: Character-select screen. Not in game yet - skipping tablet/marketplace.");
-            return;
+            case GameScreen.Marketplace:
+                _logger.Info("Status: marketplace active. Nothing to recover.");
+                return;
+
+            case GameScreen.MapOpen:
+                _logger.Info("Status: map open. Closing it...");
+                CheckAndCloseMap();
+                return;
+
+            case GameScreen.InGame:
+                _logger.Info("Status: in game. Opening tablet and marketplace...");
+                OpenMarketplace(gameHandle, coords, timings);
+                return;
+
+            default:
+                _logger.Warning($"Status: {screen}. Trying the default open...");
+                OpenMarketplace(gameHandle, coords, timings);
+                return;
         }
-
-        if (rMp is >= 15 and <= 50 && gMp is >= 45 and <= 90 && bMp is >= 85 and <= 130)
-        {
-            _logger.Info("Status: Marketplace open but overlay present. Closing overlay...");
-            CheckAndCloseWarning();
-            return;
-        }
-
-        if (rMp is >= 40 and <= 85 && gMp is >= 110 and <= 160 && bMp is >= 190 and <= 245)
-        {
-            _logger.Info("Status: Marketplace active.");
-            return;
-        }
-
-        if (rHud >= 200 && gHud <= 60 && bHud is >= 80 and <= 170)
-        {
-            _logger.Info("Status: In game. Opening tablet and marketplace...");
-            OpenMarketplace(gameHandle, coords, timings);
-            return;
-        }
-
-        _logger.Warning($"Status: Unknown (HUD: {rHud},{gHud},{bHud} | MP: {rMp},{gMp},{bMp}). Trying default open...");
-        OpenMarketplace(gameHandle, coords, timings);
     }
 
     private void OpenMarketplace(IntPtr gameHandle, ScaledCoordinates coords, TimingSettings timings)

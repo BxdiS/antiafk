@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using AntiAfk.App.Services;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
@@ -72,14 +72,25 @@ internal static class Program
                 var windowService = new WindowService();
                 var inputService = new InputService(windowService);
                 var screenCapture = new ScreenCaptureService();
+                var recognizer = new ScreenRecognizer(screenCapture, logger);
                 var stateDetector = new StateDetector(
                     screenCapture,
+                    recognizer,
                     inputService,
                     logger,
                     runtime,
                     () => configService.Current.Timings);
                 var gameLauncher = new GameLauncherService(configService, logger);
-                var autoLoginService = new AutoLoginService(logger, screenCapture, inputService, windowService);
+                // Screen recognition, actions and the flow that drives them are three separate
+                // pieces on purpose: the recogniser decides what is on screen, the actions know how
+                // to do one thing each, and the flow only maps one to the other.
+                var gameActions = new GameActions(
+                    inputService,
+                    windowService,
+                    recognizer,
+                    logger,
+                    () => configService.Current.Timings);
+                var autoLoginService = new LoginFlowService(recognizer, gameActions, windowService, logger);
                 var progressStore = new EngineProgressStore();
 
                 var engine = new AntiAfkEngine(
