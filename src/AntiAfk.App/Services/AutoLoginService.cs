@@ -66,6 +66,11 @@ public sealed class AutoLoginService : IAutoLoginService
         public const int HudTolerance = 40;
     }
 
+    /// How long the game is given to resume rendering after being brought to the front, before the
+    /// first click. Matches what the mid-flow path effectively gets from InitFocusDelay plus its
+    /// own settle, so the two paths behave the same.
+    private static readonly TimeSpan GameFocusSettle = TimeSpan.FromSeconds(2);
+
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;
     private readonly IInputService _inputService;
@@ -129,6 +134,10 @@ public sealed class AutoLoginService : IAutoLoginService
                 }
             }
 
+            // Step 3c: make the game the active window and let it come back up to speed before
+            // anything is clicked. Both paths run this, so they behave identically from here on.
+            await BringGameToFrontAsync(cancellationToken);
+
             // Step 4: Character selection (1 of 3)
             await SelectCharacterAsync(characterSlot, cancellationToken);
 
@@ -151,6 +160,51 @@ public sealed class AutoLoginService : IAutoLoginService
             // the game window and run its own state recovery even if login partially fails.
             _logger.Error("Auto-login failed", ex);
         }
+    }
+
+    /// <summary>
+    /// Activates the game window and waits for it to resume normal speed, before the first click.
+    ///
+    /// This is what the reported delay actually is. Coming from the launcher, the game has been in
+    /// the background the whole time - the launcher held foreground, then whatever the user was
+    /// doing. GTA V throttles its render loop hard when it is not the active window, and it
+    /// consumes injected mouse input on a frame boundary, reading the cursor position at the moment
+    /// it gets round to it rather than the position the click was sent with. So the press is not
+    /// lost, it is deferred: by the time the game processes it the cursor has already travelled to
+    /// the next target, and that is where the click lands. From the outside it looks exactly like
+    /// "the click fires on the next movement".
+    ///
+    /// Our own timing is not involved - the click instrumentation reports the press and release
+    /// happening on schedule, because they do. The wait is on the other side of the injection.
+    ///
+    /// The mid-flow path never showed this because RunStartupRecoveryAsync raises the window and
+    /// waits InitFocusDelay before auto-login is even called, so the game has been foreground and
+    /// rendering for seconds by the time anything is clicked. This is that same step, made explicit
+    /// and applied to both paths.
+    /// </summary>
+    private async Task BringGameToFrontAsync(CancellationToken cancellationToken)
+    {
+        var handle = _windowService.FindGameWindow()?.Handle ?? IntPtr.Zero;
+        if (handle == IntPtr.Zero)
+        {
+            _logger.Warning(
+                "Auto-login: game window not found, so it cannot be activated before clicking. " +
+                "Clicks may be processed late and land on the wrong control.");
+            return;
+        }
+
+        var alreadyFront = _windowService.GetForegroundWindow() == handle;
+        _logger.Info(
+            alreadyFront
+                ? "Auto-login: game window is already in front; letting it settle before clicking."
+                : $"Auto-login: activating the game window (was \"{_windowService.GetWindowTitle(_windowService.GetForegroundWindow())}\").");
+
+        _windowService.ForceForeground(handle);
+
+        // A throttled window does not resume instantly: the game has to be scheduled, restore its
+        // swap chain and render again before it will consume input at normal speed. 300 ms, which
+        // is all ClickScreenOnGame allows, is not enough for that from a cold background state.
+        await Task.Delay(GameFocusSettle, cancellationToken);
     }
 
     /// <summary>
