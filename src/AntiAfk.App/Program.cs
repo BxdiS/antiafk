@@ -27,7 +27,7 @@ internal static class Program
             return;
         }
 
-        using var mutex = new Mutex(true, AppBranding.MutexName, out var createdNew);
+        using var mutex = AcquireSingleInstanceMutex(out var createdNew);
         if (!createdNew)
         {
             MessageBox.Show(
@@ -52,6 +52,32 @@ internal static class Program
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// Single-instance guard. Prefers the Global\ namespace so a second copy is caught across
+    /// sessions, but a Global\ mutex created by another user is owned by them: opening it throws
+    /// UnauthorizedAccessException, which used to take the whole app down at startup with no
+    /// message. Falls back to a per-session Local\ mutex, which still catches the case that
+    /// actually matters - the same user starting the app twice.
+    /// </summary>
+    private static Mutex AcquireSingleInstanceMutex(out bool createdNew)
+    {
+        try
+        {
+            return new Mutex(true, AppBranding.MutexName, out createdNew);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Another account holds the global mutex. Nothing to do about that except stop
+            // competing for it.
+        }
+        catch (IOException)
+        {
+            // The name exists as a different kernel object type.
+        }
+
+        return new Mutex(true, AppBranding.LocalMutexName, out createdNew);
     }
 
     private static TrayApplicationContext CreateContext()
