@@ -25,7 +25,18 @@ public sealed class GitHubUpdateService : IUpdateService
 
     public UpdateAvailability Availability { get; private set; } = UpdateAvailability.None;
     public bool IsSupported { get; private set; } = true;
-    public bool CanApply => Availability == UpdateAvailability.Ready && _downloadedExePath is not null;
+    // Reads _downloadedExePath, which the timer thread writes, so it takes the same lock the
+    // writer does. Availability is only ever set on this thread via SetAvailability.
+    public bool CanApply
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return Availability == UpdateAvailability.Ready && _downloadedExePath is not null;
+            }
+        }
+    }
 
     public GitHubUpdateService(IConfigService configService, IAppLogger logger)
     {
@@ -56,19 +67,23 @@ public sealed class GitHubUpdateService : IUpdateService
 
     public async Task ApplyUpdateAsync()
     {
-        if (_downloadedExePath is null || Environment.ProcessPath is null)
-        {
-            _logger.Warning("No downloaded update to apply.");
-            return;
-        }
-
         var currentExePath = Environment.ProcessPath;
         string? tempDir;
         string? newExePath;
+
+        // Both fields are read in one critical section. Testing _downloadedExePath outside the lock
+        // first, as this used to, meant the pair could be replaced by the download thread between
+        // the guard and the read.
         lock (_sync)
         {
             tempDir = _downloadedTempDir;
             newExePath = _downloadedExePath;
+        }
+
+        if (newExePath is null || currentExePath is null)
+        {
+            _logger.Warning("No downloaded update to apply.");
+            return;
         }
 
         _logger.Info($"Applying update, swapping into: {currentExePath}");
@@ -220,8 +235,15 @@ public sealed class GitHubUpdateService : IUpdateService
                 return;
             }
 
-            _downloadedExePath = exePath;
-            _downloadedTempDir = tempDir;
+            // Written under the lock ApplyUpdateAsync and CanApply read them under. The check runs
+            // on a timer thread, so an unsynchronised write here could be seen half-applied - a
+            // non-null exe path paired with a stale temp dir, which the apply script would then
+            // delete out from under the new binary.
+            lock (_sync)
+            {
+                _downloadedExePath = exePath;
+                _downloadedTempDir = tempDir;
+            }
 
             SetAvailability(UpdateAvailability.Ready);
             _logger.Info($"Update {remoteVersion} downloaded and ready to apply.");

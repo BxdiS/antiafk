@@ -149,7 +149,9 @@ public sealed class AutoLoginService : IAutoLoginService
     // when clicks "go nowhere" is what the screen actually is.
     private void LogScreenGeometry()
     {
-        var (width, height) = _windowService.GetScreenSize();
+        // Deliberately the primary monitor: these coordinates are for the launcher window, which
+        // exists before the game window does, so there is no game handle to ask about yet.
+        var (width, height) = _windowService.GetScreenSize(IntPtr.Zero);
         _logger.Info($"Auto-login: primary screen is {width}x{height}.");
 
         if (width != Coords.MeasuredWidth || height != Coords.MeasuredHeight)

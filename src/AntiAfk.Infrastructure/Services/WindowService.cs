@@ -427,8 +427,21 @@ public sealed class WindowService : IWindowService
         return true;
     }
 
-    public (int Width, int Height) GetScreenSize()
+    public (int Width, int Height) GetScreenSize(IntPtr windowHandle)
     {
+        // Screen.FromHandle picks the monitor with the largest intersection with the window, which
+        // is the one the game is on. Returning the primary monitor unconditionally, as this used
+        // to, meant a game on a second display was scaled against a resolution it was never
+        // running at.
+        if (windowHandle != IntPtr.Zero && NativeMethods.IsWindow(windowHandle))
+        {
+            var windowBounds = System.Windows.Forms.Screen.FromHandle(windowHandle).Bounds;
+            if (windowBounds.Width > 0 && windowBounds.Height > 0)
+            {
+                return (windowBounds.Width, windowBounds.Height);
+            }
+        }
+
         var bounds = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
         return (bounds.Width, bounds.Height);
     }

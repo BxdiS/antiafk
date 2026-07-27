@@ -28,7 +28,7 @@ Before any of that the downloaded file is checked against `AntiAFK.exe.sha256` f
 
 Settings are set via tray → **Settings** and don't persist to disk. The structure of config fields is documented in [config.example.json](config.example.json) — it's a reference, not a file the app reads.
 
-`launcherPath` empty means auto-detect the launcher in standard Windows paths. UI coordinates and timings are hardcoded; you can't change them through config.
+`launcherPath` empty means auto-detect the launcher in standard Windows paths. The settings field stays empty and shows the detected path as a hint — that is the intended state. Do not type it in: once the field holds a concrete path, auto-detect is off, and reinstalling the launcher elsewhere will break startup. UI coordinates and timings are hardcoded; you can't change them through config.
 
 ## Building from source
 
@@ -82,7 +82,7 @@ The plan is to get a free signature from [SignPath](https://signpath.org/). The 
 | Symptom | What to check |
 |---------|---------------|
 | Game not found | Need the `GTA5.exe` process or Majestic RP client window with version in the title |
-| Clicks land in the wrong place | The log starts with `Display ...` lines showing each monitor's scale. Anything other than 100% shifts the coordinates — run the game on a 100% display |
+| Clicks land in the wrong place | The log starts with `Display ...` lines showing each monitor's scale. Anything other than 100% shifts the coordinates — run the game on a 100% display. The `Scaling applied` line reports which screen resolution the scale was computed from |
 | Engine stopped on its own | After five crashes in a row it stops restarting instead of looping the same failure. The cause is in the log console; Start tries again |
 | Updates aren't coming | Latest release must be published (not draft, not pre-release) and contain `AntiAFK.exe`. Without an `AntiAFK.exe.sha256` next to it the update is discarded as unverifiable |
 | Workflow didn't run | Tag must start with `v` |

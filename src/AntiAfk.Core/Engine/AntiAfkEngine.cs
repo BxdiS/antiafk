@@ -251,7 +251,7 @@ public sealed class AntiAfkEngine
         // Finish logging in before any marketplace handling.
         await RunAutoLoginIfAtCharacterSelectAsync("Startup", cancellationToken);
 
-        _stateDetector.SmartStateRecovery();
+        await _stateDetector.SmartStateRecoveryAsync(cancellationToken);
         RestoreUserWindow("Startup");
         NormalizeBackgroundPhaseAfterRecovery();
 
@@ -373,9 +373,25 @@ public sealed class AntiAfkEngine
                     continue;
                 }
 
+                // Avoiding the previous button is a preference, not a requirement. With a single
+                // configured button the filter empties the array, and _random.Next(0) returns 0,
+                // so indexing it threw. BaseButtons has 11 entries today, which is the only reason
+                // this is not already a crash.
                 var available = Enumerable.Range(0, _coordinates.Buttons.Count)
                     .Where(i => i != _progress.LastButtonIndex)
                     .ToArray();
+                if (available.Length == 0)
+                {
+                    available = [.. Enumerable.Range(0, _coordinates.Buttons.Count)];
+                }
+
+                if (available.Length == 0)
+                {
+                    _logger.Error("No marketplace buttons are configured; skipping the background click.");
+                    await DelaySeconds(1, cancellationToken);
+                    continue;
+                }
+
                 var index = available[_random.Next(available.Length)];
                 _progress.LastButtonIndex = index;
                 var button = _coordinates.Buttons[index];
@@ -466,7 +482,7 @@ public sealed class AntiAfkEngine
                 break;
 
             case EnginePhase.CheckMap:
-                _stateDetector.CheckAndCloseMap();
+                await _stateDetector.CheckAndCloseMapAsync(cancellationToken);
                 _progress.PendingWalkSeconds = timings.WalkDuration.Sample(_random);
                 _progress.Phase = EnginePhase.WalkFirst;
                 break;
@@ -480,7 +496,7 @@ public sealed class AntiAfkEngine
                 break;
 
             case EnginePhase.TurnFirst:
-                PerformTurnSequence(_progress.PendingTurnGapMean);
+                await PerformTurnSequenceAsync(_progress.PendingTurnGapMean, cancellationToken);
                 _progress.PendingWalkSeconds = timings.WalkDuration.Sample(_random);
                 _progress.Phase = EnginePhase.WalkSecond;
                 break;
@@ -494,7 +510,7 @@ public sealed class AntiAfkEngine
                 break;
 
             case EnginePhase.TurnSecond:
-                PerformTurnSequence(_progress.PendingTurnGapMean);
+                await PerformTurnSequenceAsync(_progress.PendingTurnGapMean, cancellationToken);
                 _logger.Info("Second turn completed — not walking forward.");
                 await DelaySeconds(timings.PostTurnDelay, cancellationToken);
                 _progress.Phase = EnginePhase.StateRecovery;
@@ -524,7 +540,7 @@ public sealed class AntiAfkEngine
                     await DelaySeconds(timings.InitFocusDelay, cancellationToken);
                 }
 
-                _stateDetector.SmartStateRecovery();
+                await _stateDetector.SmartStateRecoveryAsync(cancellationToken);
                 _progress.Phase = EnginePhase.ReturnFocus;
                 break;
 
@@ -616,7 +632,7 @@ public sealed class AntiAfkEngine
         _logger.Info($"[Background] Waiting {delaySeconds:F0}s before {nextStep}...");
     }
 
-    private void PerformTurnSequence(double gapMean)
+    private async Task PerformTurnSequenceAsync(double gapMean, CancellationToken cancellationToken)
     {
         var timings = _configService.Current.Timings;
         var durA = timings.TurnKeyDuration.Sample(_random);
@@ -627,23 +643,30 @@ public sealed class AntiAfkEngine
         var gap2 = _random.NextDouble() * (jitter * 2) + Math.Max(0.01, gapMean - jitter);
 
         _logger.Info($"Turn sequence: A({durA:F2}s) -> {gap1:F2}s -> S({durS:F2}s) -> {gap2:F2}s -> C({durC:F2}s)");
+        // The gaps between turns are several seconds each. Task.Delay rather than Thread.Sleep so
+        // stopping the engine does not have to wait out the rest of the sequence.
         _inputService.SendKeyToGame(_gameHandle, NativeKeys.A, durA);
-        Thread.Sleep(TimeSpan.FromSeconds(gap1));
+        await Task.Delay(TimeSpan.FromSeconds(gap1), cancellationToken);
         _inputService.SendKeyToGame(_gameHandle, NativeKeys.S, durS);
-        Thread.Sleep(TimeSpan.FromSeconds(gap2));
+        await Task.Delay(TimeSpan.FromSeconds(gap2), cancellationToken);
         _inputService.SendKeyToGame(_gameHandle, NativeKeys.C, durC);
-        Thread.Sleep(TimeSpan.FromSeconds(timings.TurnKeyDuration.Sample(_random)));
+        await Task.Delay(TimeSpan.FromSeconds(timings.TurnKeyDuration.Sample(_random)), cancellationToken);
     }
 
     private void ApplyScaling(GameWindowInfo game)
     {
-        var screen = _windowService.GetScreenSize();
+        // The monitor the game is on, not the primary one. CoordinateScaler falls back to these
+        // dimensions when the window rect is unusable, and falling back to a display the game is
+        // not running on produces a scale that is wrong everywhere.
+        var screen = _windowService.GetScreenSize(game.Handle);
         _coordinates = CoordinateScaler.Apply(game.Left, game.Top, game.Width, game.Height, screen.Width, screen.Height);
         _runtime.Coordinates = _coordinates;
         _progress.LastWindowWidth = game.Width;
         _progress.LastWindowHeight = game.Height;
 
-        _logger.Info($"Scaling applied: window={game.Width}x{game.Height} @({game.Left},{game.Top})");
+        _logger.Info(
+            $"Scaling applied: window={game.Width}x{game.Height} @({game.Left},{game.Top}) " +
+            $"on a {screen.Width}x{screen.Height} display");
     }
 
     private void CheckResolutionChanged()

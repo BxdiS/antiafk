@@ -98,21 +98,14 @@ public sealed class LogConsoleForm : Form
                 try
                 {
                     int end = Math.Min(i + LoadBatchSize, buffer.Count);
-                    for (int j = i; j < end; j++)
-                    {
-                        try
-                        {
-                            AppendLineInternal(buffer[j]);
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Error appending buffer line: {ex.Message}");
-                        }
-                    }
+                    AppendRun(buffer, i, end);
 
-                    // Allow UI thread to update
+                    // Yields to the message loop on its own - awaiting here returns control to the
+                    // pump and resumes after it. Application.DoEvents() used to follow this call
+                    // and was the reentrancy hazard: it pumped messages from *inside* the load
+                    // loop, so a log line arriving mid-load ran OnLineLogged -> AppendLine and
+                    // modified the RichTextBox underneath the loop that was still filling it.
                     await Task.Delay(10);
-                    Application.DoEvents();
                 }
                 catch (Exception ex)
                 {
@@ -192,6 +185,47 @@ public sealed class LogConsoleForm : Form
         }
     }
 
+    /// <summary>
+    /// Appends buffer[start..end) grouping consecutive same-coloured lines into one AppendText.
+    /// The initial load is the one place that writes thousands of lines in a row, and one
+    /// RichTextBox operation per line is what made opening the console slow.
+    /// </summary>
+    private void AppendRun(IReadOnlyList<string> buffer, int start, int end)
+    {
+        var runStart = start;
+
+        while (runStart < end)
+        {
+            var color = GetLineColor(buffer[runStart]);
+            var runEnd = runStart + 1;
+            while (runEnd < end && GetLineColor(buffer[runEnd]) == color)
+            {
+                runEnd++;
+            }
+
+            var text = new System.Text.StringBuilder();
+            for (var i = runStart; i < runEnd; i++)
+            {
+                text.Append(buffer[i]).Append(Environment.NewLine);
+            }
+
+            if (_logView.IsDisposed)
+            {
+                return;
+            }
+
+            _logView.SelectionStart = _logView.TextLength;
+            _logView.SelectionLength = 0;
+            _logView.SelectionColor = color;
+            _logView.AppendText(text.ToString());
+            _lineCount += runEnd - runStart;
+
+            runStart = runEnd;
+        }
+
+        TrimIfNeeded();
+    }
+
     private void AppendLineInternal(string line)
     {
         if (_logView == null || _logView.IsDisposed)
@@ -222,21 +256,24 @@ public sealed class LogConsoleForm : Form
                 return;
             }
 
-            var text = _logView.Text;
-            if (string.IsNullOrEmpty(text))
+            // Trims down to the cap in one edit rather than dropping a single line per append.
+            // AppendRun can add a whole batch at once, so removing one line per call would not keep
+            // up with it.
+            var excess = _lineCount - MaxDocumentLines;
+
+            // GetFirstCharIndexFromLine returns the offset of that line directly, so the cut point
+            // costs nothing to find. Reading _logView.Text instead, as this used to, materialised
+            // the entire document into a string on every append past the cap - the whole log copied
+            // per line, which is what made heavy logging drag the UI down.
+            var cutTo = _logView.GetFirstCharIndexFromLine(excess);
+            if (cutTo <= 0)
             {
                 return;
             }
 
-            var firstLineEnd = text.IndexOf('\n');
-            if (firstLineEnd < 0)
-            {
-                return;
-            }
-
-            _logView.Select(0, firstLineEnd + 1);
+            _logView.Select(0, cutTo);
             _logView.SelectedText = string.Empty;
-            _lineCount--;
+            _lineCount -= excess;
         }
         catch (ObjectDisposedException)
         {
