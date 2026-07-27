@@ -71,6 +71,10 @@ public sealed class AutoLoginService : IAutoLoginService
     private readonly IInputService _inputService;
     private readonly IWindowService _windowService;
 
+    // Last reported capture failure, so a poll that cannot read the screen is logged once per run
+    // of identical failures rather than once a second.
+    private string _lastCaptureFailure = string.Empty;
+
     public AutoLoginService(
         IAppLogger logger,
         IScreenCaptureService screenCapture,
@@ -331,37 +335,39 @@ public sealed class AutoLoginService : IAutoLoginService
         };
     }
 
+    // No try/catch: an unreadable screen is a false, not an exception. This is polled once a second
+    // for minutes while the game starts, and through most of that window the desktop genuinely
+    // cannot be read - throwing there meant a first-chance exception per second, which an attached
+    // debugger stops the process to service.
     private bool IsPixelColor(int x, int y, uint expectedColor, int tolerance = 30)
     {
-        try
+        if (!_screenCapture.TryGetPixelColor(x, y, out var actual))
         {
-            var (r, g, b) = _screenCapture.GetPixelColor(x, y);
-
-            var expected = expectedColor & 0xFFFFFF;
-            var r2 = (int)((expected >> 16) & 0xFF);
-            var g2 = (int)((expected >> 8) & 0xFF);
-            var b2 = (int)(expected & 0xFF);
-
-            var rDiff = Math.Abs(r - r2);
-            var gDiff = Math.Abs(g - g2);
-            var bDiff = Math.Abs(b - b2);
-
-            return rDiff <= tolerance && gDiff <= tolerance && bDiff <= tolerance;
-        }
-        catch (ArgumentOutOfRangeException ex)
-        {
-            _logger.Error($"Invalid pixel coordinates ({x}, {y}): {ex.Message}");
+            LogCaptureFailure(x, y);
             return false;
         }
-        catch (InvalidOperationException ex)
+
+        var expected = expectedColor & 0xFFFFFF;
+        var r2 = (int)((expected >> 16) & 0xFF);
+        var g2 = (int)((expected >> 8) & 0xFF);
+        var b2 = (int)(expected & 0xFF);
+
+        return Math.Abs(actual.R - r2) <= tolerance
+            && Math.Abs(actual.G - g2) <= tolerance
+            && Math.Abs(actual.B - b2) <= tolerance;
+    }
+
+    // A poll that cannot read the screen is normal while the game is starting, so logging every one
+    // would bury the log. Only the first of a run is reported.
+    private void LogCaptureFailure(int x, int y)
+    {
+        var reason = _screenCapture.LastFailureReason;
+        if (reason == _lastCaptureFailure)
         {
-            _logger.Warning($"Failed to capture pixel at ({x}, {y}), screen may be locked or scaling issue: {ex.Message}");
-            return false;
+            return;
         }
-        catch (Exception ex)
-        {
-            _logger.Error($"Unexpected error checking pixel color at ({x}, {y}): {ex.Message}", ex);
-            return false;
-        }
+
+        _lastCaptureFailure = reason;
+        _logger.Warning($"Auto-login: screen read at ({x},{y}) failed - {reason}");
     }
 }

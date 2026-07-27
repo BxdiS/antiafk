@@ -23,9 +23,16 @@ public sealed class InputService : IInputService
     private readonly IWindowService _windowService;
     private readonly Random _random = new();
 
-    public InputService(IWindowService windowService)
+    // How much longer than the scheduled delay a step may take before it is worth reporting. Well
+    // clear of ordinary scheduler jitter, low enough to catch a debugger servicing an exception.
+    private const long StepSlackMs = 150;
+
+    private readonly IAppLogger _logger;
+
+    public InputService(IWindowService windowService, IAppLogger logger)
     {
         _windowService = windowService;
+        _logger = logger;
     }
 
     public void SendKey(ushort virtualKey, double durationSeconds)
@@ -113,18 +120,57 @@ public sealed class InputService : IInputService
             //
             // If this ever needs tracing again, log it through IAppLogger before or after the click,
             // never between the steps.
+            // Stopwatch reads are a QueryPerformanceCounter and nothing else - no allocation, no
+            // formatting, no chance of blocking. Everything they measure is reported after the
+            // click is over.
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+
             System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
+            var movedAt = elapsed.ElapsedMilliseconds;
             Thread.Sleep(300); // Time for the cursor to physically arrive before the press.
             NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+            var pressedAt = elapsed.ElapsedMilliseconds;
             Thread.Sleep(100); // How long a person holds the button down.
             NativeMethods.mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+            var releasedAt = elapsed.ElapsedMilliseconds;
             Thread.Sleep(200); // Nothing repositions the cursor until the game has acted on this.
+
+            ReportIfStretched(screenX, screenY, movedAt, pressedAt, releasedAt);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Exception: {ex.Message}");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Reports a click whose steps took materially longer than they were told to sleep.
+    ///
+    /// The whole sequence depends on the move, the press and the release staying the scheduled
+    /// distance apart. Anything that suspends this thread in between - a debugger servicing a
+    /// caught exception or an OutputDebugString, a stalled machine - widens the gap between the
+    /// cursor arriving and the button going down, which is the window in which the click can end up
+    /// somewhere else. That used to be invisible and had to be guessed at; now it is a log line
+    /// with a number in it.
+    ///
+    /// Called after the click has finished, never between its steps.
+    /// </summary>
+    private void ReportIfStretched(int screenX, int screenY, long movedAt, long pressedAt, long releasedAt)
+    {
+        var moveToPress = pressedAt - movedAt;
+        var pressToRelease = releasedAt - pressedAt;
+
+        if (moveToPress <= 300 + StepSlackMs && pressToRelease <= 100 + StepSlackMs)
+        {
+            return;
+        }
+
+        _logger.Warning(
+            $"Click ({screenX},{screenY}) ran long: {moveToPress}ms from cursor move to press " +
+            $"(expected ~300ms), {pressToRelease}ms held (expected ~100ms). Something suspended the " +
+            "thread mid-click - a debugger servicing an exception is the usual cause, and the click " +
+            "may not have landed where it was aimed.");
     }
 
     public void ClickScreenOnGame(IntPtr gameHandle, int screenX, int screenY)

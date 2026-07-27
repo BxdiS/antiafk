@@ -54,6 +54,38 @@ internal static class Program
         }
     }
 
+#if DEBUG
+    private const string BuildConfiguration = "Debug";
+#else
+    private const string BuildConfiguration = "Release";
+#endif
+
+    /// <summary>
+    /// States the build and whether a debugger is attached, at the top of every log.
+    ///
+    /// The two behave differently in a way that matters here and is otherwise invisible: a Debug
+    /// build keeps its Debug.WriteLine calls, and under a debugger both those and every caught
+    /// exception suspend the process while the debugger services them. The click sequence is built
+    /// out of fixed delays between a cursor move and a button press, so those suspensions stretch
+    /// the one gap that has to stay tight, and clicks land in the wrong place. The release build
+    /// has neither. Working that out from behaviour alone cost several rounds; it is one line.
+    /// </summary>
+    private static void LogBuildEnvironment(IAppLogger logger)
+    {
+        var debuggerAttached = System.Diagnostics.Debugger.IsAttached;
+        logger.Info($"Build: {BuildConfiguration}. Debugger attached: {debuggerAttached}.");
+
+        if (BuildConfiguration == "Debug" && debuggerAttached)
+        {
+            logger.Warning(
+                "Running a Debug build under a debugger. Every caught exception and every " +
+                "Debug.WriteLine suspends this process while the debugger handles it, which " +
+                "stretches the fixed delays the click sequence depends on. If clicks land in the " +
+                "wrong place, reproduce without the debugger (Ctrl+F5, or run the built exe " +
+                "directly) before looking anywhere else.");
+        }
+    }
+
     private static TrayApplicationContext CreateContext()
     {
         try
@@ -70,7 +102,7 @@ internal static class Program
 
                 var runtime = new EngineRuntime();
                 var windowService = new WindowService();
-                var inputService = new InputService(windowService);
+                var inputService = new InputService(windowService, logger);
                 var screenCapture = new ScreenCaptureService();
                 var stateDetector = new StateDetector(
                     screenCapture,
@@ -104,6 +136,7 @@ internal static class Program
                 });
 
                 logger.Info($"{AppBranding.DisplayName} started.");
+                LogBuildEnvironment(logger);
 
                 // Logged up front because every coordinate below depends on it: a display that is
                 // not at 100% scale is the first thing to check when clicks land in the wrong place.

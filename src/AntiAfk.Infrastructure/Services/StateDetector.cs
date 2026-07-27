@@ -1,4 +1,4 @@
-using AntiAfk.Core.Abstractions;
+﻿using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
@@ -32,19 +32,15 @@ public sealed class StateDetector : IStateDetector
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
 
-        bool found;
-        try
-        {
-            found = _screenCapture.RegionContainsColor(
+        if (!_screenCapture.TryRegionContainsColor(
                 coords.WarnBoxX1,
                 coords.WarnBoxY1,
                 coords.WarnBoxX2,
                 coords.WarnBoxY2,
-                static (r, g, b) => r > 180 && g < 100 && b < 100);
-        }
-        catch (Exception ex)
+                static (r, g, b) => r > 180 && g < 100 && b < 100,
+                out var found))
         {
-            _logger.Warning($"CheckAndCloseWarning: failed to read screen region ({ex.Message}). Skipping.");
+            _logger.Warning($"CheckAndCloseWarning: {_screenCapture.LastFailureReason}. Skipping.");
             return false;
         }
 
@@ -64,16 +60,13 @@ public sealed class StateDetector : IStateDetector
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
 
-        byte r, g, b;
-        try
+        if (!_screenCapture.TryGetPixelColor(coords.MapPixelX, coords.MapPixelY, out var map))
         {
-            (r, g, b) = _screenCapture.GetPixelColor(coords.MapPixelX, coords.MapPixelY);
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning($"CheckAndCloseMap: failed to read pixel ({ex.Message}). Skipping.");
+            _logger.Warning($"CheckAndCloseMap: {_screenCapture.LastFailureReason}. Skipping.");
             return false;
         }
+
+        var (r, g, b) = map;
 
         if (r > 200 && g < 40 && b is >= 80 and <= 140)
         {
@@ -94,18 +87,15 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
-        try
+        if (!_screenCapture.TryGetPixelColor(coords.CharSelectPixelX, coords.CharSelectPixelY, out var pixel))
         {
-            var (r, g, b) = _screenCapture.GetPixelColor(coords.CharSelectPixelX, coords.CharSelectPixelY);
-            return Math.Abs(r - GameConstants.CharSelectR) <= GameConstants.CharSelectTolerance
-                && Math.Abs(g - GameConstants.CharSelectG) <= GameConstants.CharSelectTolerance
-                && Math.Abs(b - GameConstants.CharSelectB) <= GameConstants.CharSelectTolerance;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning($"IsAtCharacterSelect: failed to read pixel ({ex.Message}).");
+            _logger.Warning($"IsAtCharacterSelect: {_screenCapture.LastFailureReason}.");
             return false;
         }
+
+        return Math.Abs(pixel.R - GameConstants.CharSelectR) <= GameConstants.CharSelectTolerance
+            && Math.Abs(pixel.G - GameConstants.CharSelectG) <= GameConstants.CharSelectTolerance
+            && Math.Abs(pixel.B - GameConstants.CharSelectB) <= GameConstants.CharSelectTolerance;
     }
 
     public void SmartStateRecovery()
@@ -116,18 +106,12 @@ public sealed class StateDetector : IStateDetector
 
         _logger.Info("Analyzing UI state...");
 
-        (byte r, byte g, byte b) hud;
-        (byte r, byte g, byte b) mp;
-        try
+        // Coordinates can be transiently unreadable right after the game window moves, resizes or
+        // minimizes. Skip this recovery pass rather than acting on a reading we do not have.
+        if (!_screenCapture.TryGetPixelColor(coords.HudPixelX, coords.HudPixelY, out var hud) ||
+            !_screenCapture.TryGetPixelColor(coords.MpPixelX, coords.MpPixelY, out var mp))
         {
-            hud = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
-            mp = _screenCapture.GetPixelColor(coords.MpPixelX, coords.MpPixelY);
-        }
-        catch (Exception ex)
-        {
-            // Coordinates can be transiently invalid right after the game window
-            // moves/resizes/minimizes. Skip this recovery pass instead of crashing the engine.
-            _logger.Warning($"SmartStateRecovery: failed to read screen state ({ex.Message}). Skipping this pass.");
+            _logger.Warning($"SmartStateRecovery: {_screenCapture.LastFailureReason}. Skipping this pass.");
             return;
         }
 
