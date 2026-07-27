@@ -11,6 +11,11 @@ public partial class LocalizationJsonContext : JsonSerializerContext
 
 public sealed class LocalizationService
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        TypeInfoResolver = new LocalizationJsonContext()
+    };
+
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new(StringComparer.OrdinalIgnoreCase);
     private string _language = "ru";
 
@@ -101,11 +106,7 @@ public sealed class LocalizationService
 
     private void Load(string language, string json)
     {
-        var options = new JsonSerializerOptions
-        {
-            TypeInfoResolver = new LocalizationJsonContext()
-        };
-        var dictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(json, options) ?? new Dictionary<string, string>();
+        var dictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(json, SerializerOptions) ?? new Dictionary<string, string>();
         _translations[language] = dictionary;
     }
 }

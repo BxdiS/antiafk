@@ -1,5 +1,15 @@
 namespace AntiAfk.Core.Abstractions;
 
+public enum AutoLoginResult
+{
+    /// The sequence ran to the end and the world finished loading.
+    Succeeded,
+
+    /// A step threw, or the world never finished loading. The game is most likely still sitting
+    /// on the character-select screen.
+    Failed
+}
+
 public interface IAutoLoginService
 {
     /// <summary>
@@ -15,6 +25,9 @@ public interface IAutoLoginService
     /// <summary>
     /// Selects a character and a spawn point, then waits for the world to load. The
     /// character-select screen is assumed to be on screen already; the caller checks that.
+    ///
+    /// Does not throw on failure - the caller still has its own state recovery to run either way -
+    /// so the return value is the only way to tell a completed login from a failed one.
     /// </summary>
-    Task AutoLoginAsync(CancellationToken cancellationToken, int characterSlot = 1, int spawnSlot = 1);
+    Task<AutoLoginResult> AutoLoginAsync(CancellationToken cancellationToken, int characterSlot = 1);
 }

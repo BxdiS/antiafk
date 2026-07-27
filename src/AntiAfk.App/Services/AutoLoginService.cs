@@ -156,7 +156,7 @@ public sealed class AutoLoginService : IAutoLoginService
     /// first. The caller now guarantees the same preconditions in both cases, so this is one
     /// sequence with one set of assumptions.
     /// </summary>
-    public async Task AutoLoginAsync(CancellationToken cancellationToken, int characterSlot = 1, int spawnSlot = 1)
+    public async Task<AutoLoginResult> AutoLoginAsync(CancellationToken cancellationToken, int characterSlot = 1)
     {
         try
         {
@@ -176,10 +176,15 @@ public sealed class AutoLoginService : IAutoLoginService
             }
 
             await SelectCharacterAsync(gameHandle, characterSlot, cancellationToken);
-            await SelectSpawnAsync(gameHandle, spawnSlot, cancellationToken);
-            await WaitForGameLoadAsync(cancellationToken);
+            await SelectSpawnAsync(gameHandle, cancellationToken);
+
+            if (!await WaitForGameLoadAsync(cancellationToken))
+            {
+                return AutoLoginResult.Failed;
+            }
 
             _logger.Info("Auto-login sequence completed successfully");
+            return AutoLoginResult.Succeeded;
         }
         catch (OperationCanceledException)
         {
@@ -188,9 +193,10 @@ public sealed class AutoLoginService : IAutoLoginService
         }
         catch (Exception ex)
         {
-            // Not rethrown: the engine awaits this and should still run its own state recovery even
-            // if login only partly succeeded.
+            // Still not rethrown: the engine awaits this and should run its own state recovery
+            // either way. The result is what tells it which of the two happened.
             _logger.Error("Auto-login failed", ex);
+            return AutoLoginResult.Failed;
         }
     }
 
@@ -257,15 +263,22 @@ public sealed class AutoLoginService : IAutoLoginService
         await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
     }
 
-    private async Task SelectSpawnAsync(IntPtr gameHandle, int spawnSlot, CancellationToken cancellationToken)
+    // Only one spawn point is mapped, so there is nothing to choose between. A slot parameter goes
+    // back in here once more of them are measured; until then it was a parameter the method read
+    // and ignored.
+    private async Task SelectSpawnAsync(IntPtr gameHandle, CancellationToken cancellationToken)
     {
-        var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
-        _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
+        var (spawnX, spawnY) = Coords.DefaultSpawn;
+        _logger.Info($"Selecting spawn point at ({spawnX}, {spawnY})");
         ClickOnWindow(gameHandle, spawnX, spawnY);
         await Task.Delay(4000, cancellationToken); // Wait for spawn confirmation to process (4s for stability)
     }
 
-    private async Task WaitForGameLoadAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Waits for the in-game HUD. Returns false if it never turned up, which means the world did
+    /// not finish loading within the timeout.
+    /// </summary>
+    private async Task<bool> WaitForGameLoadAsync(CancellationToken cancellationToken)
     {
         // Wait for the in-game HUD to appear
         var loaded = false;
@@ -290,11 +303,11 @@ public sealed class AutoLoginService : IAutoLoginService
         if (!loaded)
         {
             _logger.Warning("Game load (HUD) indicator not detected within timeout");
+            return false;
         }
-        else
-        {
-            _logger.Info("Game fully loaded (HUD detected)");
-        }
+
+        _logger.Info("Game fully loaded (HUD detected)");
+        return true;
     }
 
     private (int selectX, int selectY, int confirmX, int confirmY) GetCharacterCoordinates(int character)
@@ -304,15 +317,6 @@ public sealed class AutoLoginService : IAutoLoginService
             2 => (Coords.Character2.X, Coords.Character2.Y, Coords.Character2Confirm.X, Coords.Character2Confirm.Y),
             3 => (Coords.Character3.X, Coords.Character3.Y, Coords.Character3Confirm.X, Coords.Character3Confirm.Y),
             _ => (Coords.Character1.X, Coords.Character1.Y, Coords.Character1Confirm.X, Coords.Character1Confirm.Y)
-        };
-    }
-
-    private (int spawnX, int spawnY) GetSpawnCoordinates(int spawnSlot)
-    {
-        // Default spawn point; extend here when additional spawn slots are mapped.
-        return spawnSlot switch
-        {
-            _ => (Coords.DefaultSpawn.X, Coords.DefaultSpawn.Y)
         };
     }
 

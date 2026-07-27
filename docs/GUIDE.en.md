@@ -58,7 +58,7 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-Then GitHub Actions builds a Native AOT `.exe` for win-x64 (self-contained binary, no .NET runtime needed), calculates SHA-256, and publishes the release immediately — not as a draft, with auto-generated release notes.
+Then GitHub Actions builds a self-contained single-file `.exe` for win-x64 (the .NET runtime is bundled, nothing needs to be installed), calculates SHA-256, and publishes the release immediately — not as a draft, with auto-generated release notes.
 
 Automatic publishing is intentional. The old Velopack scheme left releases as draft, and it was easy to forget the manual "Publish" click — that's exactly why auto-updates "didn't work."
 
@@ -73,7 +73,7 @@ Auto-generated release notes just list commits. If you want something more human
 
 ## Code signing
 
-`AntiAFK.exe` isn't signed, so SmartScreen complains on the first run. That's normal for any unfamiliar binary and has nothing to do with portability or AOT builds.
+`AntiAFK.exe` isn't signed, so SmartScreen complains on the first run. That's normal for any unfamiliar binary and has nothing to do with how it's built.
 
 The plan is to get a free signature from [SignPath](https://signpath.org/). The project is under [GPL-3.0](../LICENSE), and an OSI-compatible license is their main requirement (they don't sign proprietary or non-OSI ones). Once approved, a step in CI will sign `publish/AntiAFK.exe` directly after `dotnet publish` — without `vpk --signTemplate`, which was leftover from the old Velopack scheme.
 

@@ -1,10 +1,15 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace AntiAfk.App.Tray;
 
 public static class TrayIconFactory
 {
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
     private static readonly Icon RunningIcon = CreateStatusIcon(Color.FromArgb(34, 197, 94));
     private static readonly Icon StoppedIcon = CreateStatusIcon(Color.FromArgb(239, 68, 68));
     private static readonly Icon WaitingIcon = CreateStatusIcon(Color.FromArgb(250, 204, 21));
@@ -31,15 +36,18 @@ public static class TrayIconFactory
         using var border = new Pen(Color.FromArgb(30, 30, 30), 2);
         graphics.DrawEllipse(border, 4, 4, 24, 24);
 
+        // GetHicon hands out a GDI icon handle that Icon.FromHandle does not own, so disposing the
+        // wrapper does not release it. Clone first (that copy owns its own handle), then destroy
+        // the original explicitly.
         var handle = bitmap.GetHicon();
-        var icon = Icon.FromHandle(handle);
         try
         {
+            using var icon = Icon.FromHandle(handle);
             return (Icon)icon.Clone();
         }
         finally
         {
-            icon.Dispose();
+            DestroyIcon(handle);
         }
     }
 }

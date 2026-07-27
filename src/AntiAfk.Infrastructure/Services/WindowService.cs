@@ -237,15 +237,22 @@ public sealed class WindowService : IWindowService
         }
     }
 
-    // Defensive sanity check: reject rects that are clearly bogus (minimized-window sentinel,
-    // or any other invalid state) instead of trusting them for coordinate scaling.
+    // Windows parks a minimized window at roughly (-32000,-32000) with a tiny size, and
+    // GetWindowRect reports that sentinel verbatim. Feeding it into coordinate scaling produces
+    // nonsense, so anything that far outside the desktop is rejected.
+    //
+    // The bound comes from the actual virtual screen rather than fixed numbers: on a large
+    // multi-monitor layout a real window can legitimately sit at a coordinate that a hardcoded
+    // limit would call insane. The margin covers windows deliberately positioned partly
+    // off-screen, which is normal and not a reason to reject the rect.
+    private const int OffScreenMargin = 2000;
+
     private static bool IsRectSane(NativeMethods.Rect rect)
     {
-        const int minReasonableCoordinate = -10000;
-        const int maxReasonableCoordinate = 20000;
+        var desktop = System.Windows.Forms.SystemInformation.VirtualScreen;
 
-        if (rect.Left < minReasonableCoordinate || rect.Top < minReasonableCoordinate ||
-            rect.Right > maxReasonableCoordinate || rect.Bottom > maxReasonableCoordinate)
+        if (rect.Left < desktop.Left - OffScreenMargin || rect.Top < desktop.Top - OffScreenMargin ||
+            rect.Right > desktop.Right + OffScreenMargin || rect.Bottom > desktop.Bottom + OffScreenMargin)
         {
             return false;
         }
