@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 
@@ -30,7 +30,11 @@ public sealed class AutoLoginService : IAutoLoginService
         /// Launcher login button. The launcher window spans roughly (410,170)-(1570,907).
         public static readonly (int X, int Y) LoginButton = (950, 487);
 
-        /// Server-connected / character-select indicator, approx. #ff007e.
+        /// Server-connected indicator, approx. #ff007e. NOT the character-select screen: it belongs
+        /// to the screen shown before it, and lighting up only means the client reached the server.
+        /// Calling it a "character-select indicator", as this comment used to, is what led to clicks
+        /// being fired off the back of it while the tiles were still coming up. Wait for
+        /// CharacterSelectPixel before touching anything.
         public static readonly (int X, int Y) ServerPixel = (634, 216);
         public const uint ServerColor = 0xff007e;
         public const int ServerTolerance = 40;
@@ -65,6 +69,10 @@ public sealed class AutoLoginService : IAutoLoginService
         public const uint HudColor = 0xff007f;
         public const int HudTolerance = 40;
     }
+
+    /// How long the character-select screen is left alone once it appears, before the first click.
+    /// Applies to both entry paths.
+    private static readonly TimeSpan CharacterSelectSettle = TimeSpan.FromSeconds(3);
 
     private readonly IAppLogger _logger;
     private readonly IScreenCaptureService _screenCapture;
@@ -108,9 +116,6 @@ public sealed class AutoLoginService : IAutoLoginService
                 // Waiting for the server-connection indicator here would poll for a pixel that
                 // belongs to the screen shown before character select, which never comes back.
                 _logger.Info("Character-select screen already detected - skipping launcher login, GTA5 wait and server-connection wait");
-
-                // Let the UI settle before clicking, same as the normal path does.
-                await Task.Delay(3000, cancellationToken);
             }
             else
             {
@@ -120,14 +125,30 @@ public sealed class AutoLoginService : IAutoLoginService
                 // Step 2: Wait for GTA5.exe process to start
                 await WaitForGTA5Async(cancellationToken);
 
-                // Step 3: Wait until the server-connected / character-select screen appears
-                var reached = await WaitForServerConnectionAsync(cancellationToken);
-                if (!reached)
+                // Step 3: Wait for the server-connected indicator.
+                if (!await WaitForServerConnectionAsync(cancellationToken))
+                {
+                    _logger.Warning("Auto-login: server connection not detected; skipping automated selection");
+                    return;
+                }
+
+                // Step 3b: and then for the character-select screen itself.
+                //
+                // These are two different screens. ServerPixel says the client reached the server;
+                // the character tiles come up some time after that, and how long depends on the
+                // account and the connection. This step used to be a flat three second wait after
+                // the server indicator, which is why a first run misclicked and a restart did not:
+                // on a restart the game is already at character select, so the branch above runs and
+                // waits for this very pixel. Both branches now require the same screen.
+                if (!await WaitForCharacterSelectAsync(cancellationToken))
                 {
                     _logger.Warning("Auto-login: character-select screen not detected; skipping automated selection");
                     return;
                 }
             }
+
+            // One settle, after either branch, so the two cannot drift apart again.
+            await Task.Delay(CharacterSelectSettle, cancellationToken);
 
             // Step 4: Character selection (1 of 3)
             await SelectCharacterAsync(characterSlot, cancellationToken);
@@ -223,9 +244,9 @@ public sealed class AutoLoginService : IAutoLoginService
         {
             if (IsPixelColor(Coords.ServerPixel.X, Coords.ServerPixel.Y, Coords.ServerColor, Coords.ServerTolerance))
             {
-                _logger.Info("Server connection / character-select screen detected");
-                // Let the UI stabilise before we start clicking (3s for slow connections)
-                await Task.Delay(3000, cancellationToken);
+                // Reaching the server, not reaching character select. The caller waits for that
+                // separately - see WaitForCharacterSelectAsync.
+                _logger.Info("Server connection detected");
                 return true;
             }
 
@@ -235,6 +256,40 @@ public sealed class AutoLoginService : IAutoLoginService
         }
 
         _logger.Warning("Server connection indicator not detected within timeout (5 minutes)");
+        return false;
+    }
+
+    /// <summary>
+    /// Polls the character-select indicator - the same pixel the "started mid-flow" check reads, so
+    /// both entry paths require the identical screen before anything is clicked.
+    /// </summary>
+    private async Task<bool> WaitForCharacterSelectAsync(CancellationToken cancellationToken)
+    {
+        var attempts = 0;
+        const int maxAttempts = 120; // up to 2 minutes past the server connection
+
+        _logger.Info(
+            $"Auto-login: waiting for character-select screen " +
+            $"(pixel {Coords.CharacterSelectPixel.X},{Coords.CharacterSelectPixel.Y})...");
+
+        while (attempts < maxAttempts)
+        {
+            if (IsPixelColor(
+                    Coords.CharacterSelectPixel.X,
+                    Coords.CharacterSelectPixel.Y,
+                    Coords.CharacterSelectColor,
+                    Coords.CharacterSelectTolerance))
+            {
+                _logger.Info("Character-select screen detected");
+                return true;
+            }
+
+            await Task.Delay(1000, cancellationToken);
+            attempts++;
+            LogWaitProgress("character-select screen", attempts, maxAttempts);
+        }
+
+        _logger.Warning("Character-select screen not detected within timeout (2 minutes)");
         return false;
     }
 
