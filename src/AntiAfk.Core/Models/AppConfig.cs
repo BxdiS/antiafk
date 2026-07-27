@@ -51,6 +51,14 @@ public sealed class TimingSettings
     // button for, so it is short and randomised rather than a fixed value.
     public RandomRange ClickHoldDuration { get; set; } = new(0.04, 0.09);
 
+    // After the release the UI needs a mouse-move before it commits the click. A release followed
+    // straight by a jump to the next button gets dropped, so the cursor is wiggled a couple of
+    // pixels sideways and back, staying inside the same control. Zero disables the wiggle.
+    public int PostClickNudgePixels { get; set; } = 3;
+
+    // Pause after each of the two wiggle moves.
+    public double PostClickNudgeDelay { get; set; } = 0.15;
+
     public static TimingSettings CreateDefault() => new();
 }
 

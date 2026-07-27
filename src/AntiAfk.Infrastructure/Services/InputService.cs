@@ -125,6 +125,8 @@ public sealed class InputService : IInputService
             _lastClickFinishedUtc = DateTime.UtcNow;
             var cursorAtRelease = System.Windows.Forms.Cursor.Position;
 
+            NudgeToCommitClick(screenX, screenY, timings);
+
             // Reports where the cursor actually was around the press. If a click still lands on the
             // wrong control while these read the intended point, the cursor is not the cause and
             // the target is interpreting the input itself.
@@ -137,7 +139,9 @@ public sealed class InputService : IInputService
             }
             else
             {
-                _logger.Info($"Click ({screenX},{screenY}): cursor held on target through press and release.");
+                _logger.Info(
+                    $"Click ({screenX},{screenY}): press and release both on target, " +
+                    $"then wiggled {timings.PostClickNudgePixels}px to commit it.");
             }
 
             // The click has just landed, as far as the game is concerned. Nothing may move the
@@ -182,6 +186,30 @@ public sealed class InputService : IInputService
         // the click that follows, so a target watching the input stream registers the hover first.
         MoveAbsolute(screenX, screenY);
         Thread.Sleep(TimeSpan.FromSeconds(timings.CursorArrivalSettle));
+    }
+
+    // The UI commits a click on the release, but only notices that release once a mouse-move
+    // reaches it. Releasing and then jumping straight to the next button loses the click, so the
+    // cursor is wiggled a couple of pixels sideways and back first - far too small to leave the
+    // control that was just clicked, but enough to be a real move event.
+    //
+    // These moves deliberately bypass MoveCursorTo: they belong to the click that just happened
+    // rather than being travel towards the next one, so the post-click hold must not gate them.
+    private void NudgeToCommitClick(int screenX, int screenY, TimingSettings timings)
+    {
+        var offset = timings.PostClickNudgePixels;
+        if (offset <= 0)
+        {
+            return;
+        }
+
+        var direction = _random.Next(2) == 0 ? -1 : 1;
+        var pause = TimeSpan.FromSeconds(timings.PostClickNudgeDelay);
+
+        MoveAbsolute(screenX + (offset * direction), screenY);
+        Thread.Sleep(pause);
+        MoveAbsolute(screenX, screenY);
+        Thread.Sleep(pause);
     }
 
     // Movement only. NOCOALESCE keeps this from being merged with any other move, so the cursor is
