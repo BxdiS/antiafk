@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
 
@@ -153,6 +153,55 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
+    /// <summary>
+    /// Clicks a point on the game window, bringing it to the front first.
+    ///
+    /// This is the whole difference between the two entry paths. Starting mid-flow, the engine has
+    /// already run ForceForeground on the game window before calling in here, so the game is active
+    /// and the clicks land. Starting from the launcher, nothing ever activates it: the game window
+    /// is created by GTA5 while the launcher, or whatever the user was doing, still holds
+    /// foreground. A click on an inactive window is handled as WM_MOUSEACTIVATE, and a window is
+    /// free to answer MA_ACTIVATEANDEAT - activate, and swallow the click rather than pass it on.
+    /// The character tile click was being spent activating the game, and only the confirm click
+    /// reached the UI, on a screen that had not moved.
+    ///
+    /// Nothing about the click itself changes; it is the same ClickScreen with the same timings.
+    /// </summary>
+    private void ClickOnGame(int screenX, int screenY) =>
+        ClickOnWindow(_windowService.FindGameWindow()?.Handle ?? IntPtr.Zero, "game", screenX, screenY);
+
+    private void ClickOnLauncher(int screenX, int screenY) =>
+        ClickOnWindow(
+            _windowService.FindMainWindowByProcess(GameConstants.LauncherProcessName),
+            "launcher",
+            screenX,
+            screenY);
+
+    private void ClickOnWindow(IntPtr handle, string description, int screenX, int screenY)
+    {
+        // Which window is actually in front is the first thing worth knowing when a click does not
+        // do what it should, and it was not in the log at all.
+        var foreground = _windowService.GetForegroundWindow();
+
+        if (handle == IntPtr.Zero)
+        {
+            _logger.Warning(
+                $"Auto-login: {description} window not found; clicking without raising it. " +
+                $"Foreground is \"{_windowService.GetWindowTitle(foreground)}\" - the press goes there.");
+            _inputService.ClickScreen(screenX, screenY);
+            return;
+        }
+
+        if (handle != foreground)
+        {
+            _logger.Info(
+                $"Auto-login: raising the {description} window " +
+                $"(was \"{_windowService.GetWindowTitle(foreground)}\").");
+        }
+
+        _inputService.ClickScreenOnGame(handle, screenX, screenY);
+    }
+
     // The coordinates below are fixed 1080p values, so the single most useful thing a log can say
     // when clicks "go nowhere" is what the screen actually is.
     private void LogScreenGeometry()
@@ -181,7 +230,7 @@ public sealed class AutoLoginService : IAutoLoginService
         }
 
         _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
-        _inputService.ClickScreen(Coords.LoginButton.X, Coords.LoginButton.Y);
+        ClickOnLauncher(Coords.LoginButton.X, Coords.LoginButton.Y);
         await Task.Delay(4000, cancellationToken); // Wait for game process to launch (4s)
     }
 
@@ -264,11 +313,11 @@ public sealed class AutoLoginService : IAutoLoginService
         var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character);
 
         _logger.Info($"Selecting character {character}: click ({selectX},{selectY})");
-        _inputService.ClickScreen(selectX, selectY);
+        ClickOnGame(selectX, selectY);
         await Task.Delay(4000, cancellationToken); // Wait for UI to respond to selection (4s for stability)
 
         _logger.Info($"Confirming character {character}: click ({confirmX},{confirmY})");
-        _inputService.ClickScreen(confirmX, confirmY);
+        ClickOnGame(confirmX, confirmY);
         await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
     }
 
@@ -276,7 +325,7 @@ public sealed class AutoLoginService : IAutoLoginService
     {
         var (spawnX, spawnY) = GetSpawnCoordinates(spawnSlot);
         _logger.Info($"Selecting spawn slot {spawnSlot} at ({spawnX}, {spawnY})");
-        _inputService.ClickScreen(spawnX, spawnY);
+        ClickOnGame(spawnX, spawnY);
         await Task.Delay(4000, cancellationToken); // Wait for spawn confirmation to process (4s for stability)
     }
 

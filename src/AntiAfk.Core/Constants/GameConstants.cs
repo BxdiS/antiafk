@@ -36,4 +36,8 @@ public static class GameConstants
     public const int CharSelectTolerance = 40;
 
     public const string GameProcessName = "GTA5";
+
+    // Process name (no extension) of "Majestic Launcher.exe", used to raise the launcher window
+    // before the login click so the press cannot go to whatever else is in front.
+    public const string LauncherProcessName = "Majestic Launcher";
 }

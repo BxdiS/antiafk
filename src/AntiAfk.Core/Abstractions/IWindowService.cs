@@ -13,4 +13,13 @@ public interface IWindowService
     UserWindowInfo? CaptureUserWindow(IntPtr gameHandle);
     bool TryRestoreUserWindow(UserWindowInfo? userWindow, IntPtr gameHandle);
     (int Width, int Height) GetScreenSize();
+
+    /// <summary>
+    /// Main window of the first running process with this name, or <see cref="IntPtr.Zero"/> if the
+    /// process is not running or has not created its window yet.
+    /// </summary>
+    IntPtr FindMainWindowByProcess(string processName);
+
+    /// <summary>Window title, for logging which window a click is about to go to.</summary>
+    string GetWindowTitle(IntPtr handle);
 }
