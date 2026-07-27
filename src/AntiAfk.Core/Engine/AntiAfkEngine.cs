@@ -569,13 +569,18 @@ public sealed class AntiAfkEngine
 
     private void ApplyScaling(GameWindowInfo game)
     {
-        var screen = _windowService.GetScreenSize();
+        // The monitor the game is on, not the primary one. CoordinateScaler falls back to these
+        // dimensions when the window rect is unusable, and falling back to a display the game is
+        // not running on produces a scale that is wrong everywhere.
+        var screen = _windowService.GetScreenSize(game.Handle);
         _coordinates = CoordinateScaler.Apply(game.Left, game.Top, game.Width, game.Height, screen.Width, screen.Height);
         _runtime.Coordinates = _coordinates;
         _progress.LastWindowWidth = game.Width;
         _progress.LastWindowHeight = game.Height;
 
-        _logger.Info($"Scaling applied: window={game.Width}x{game.Height} @({game.Left},{game.Top})");
+        _logger.Info(
+            $"Scaling applied: window={game.Width}x{game.Height} @({game.Left},{game.Top}) " +
+            $"on a {screen.Width}x{screen.Height} display");
     }
 
     private void CheckResolutionChanged()

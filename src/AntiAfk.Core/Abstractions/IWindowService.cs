@@ -12,5 +12,10 @@ public interface IWindowService
     void ForceForeground(IntPtr handle);
     UserWindowInfo? CaptureUserWindow(IntPtr gameHandle);
     bool TryRestoreUserWindow(UserWindowInfo? userWindow, IntPtr gameHandle);
-    (int Width, int Height) GetScreenSize();
+    /// <summary>
+    /// Bounds of the monitor <paramref name="windowHandle"/> sits on. Pass <see cref="IntPtr.Zero"/>
+    /// for the primary monitor. Coordinate scaling must use the display the game is actually on -
+    /// on a multi-monitor setup the primary one is frequently not it.
+    /// </summary>
+    (int Width, int Height) GetScreenSize(IntPtr windowHandle);
 }
