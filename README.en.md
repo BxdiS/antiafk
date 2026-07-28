@@ -1,4 +1,7 @@
 [**Русская версия →**](README.md)
+> [!TIP]
+> ⭐ **If the program useful — star the project!**
+> Stars help the project get into the search. Thank you!
 
 # AntiAFK
 
