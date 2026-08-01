@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using AntiAfk.Core.Abstractions;
 using AntiAfk.Core.Constants;
+using AntiAfk.Core.Vision;
 
 namespace AntiAfk.App.Services;
 
@@ -58,7 +59,14 @@ public sealed class AutoLoginService : IAutoLoginService
         public static readonly (int X, int Y) Character3 = (1333, 927);
         public static readonly (int X, int Y) Character3Confirm = (1323, 993);
 
-        /// Default spawn point. Extend when additional spawn slots are mapped.
+        /// Last-resort spawn click, used only when the spawn bar could not be read at all.
+        ///
+        /// This is where the bot used to click every time, and it is worth knowing what that
+        /// actually was: on a bar of five icons it lands on the fourth one. Not the fourth spawn
+        /// point in any meaningful sense - just whatever the fourth icon happens to be for that
+        /// player, on that day. Which spawn point that is changes the moment they buy a house,
+        /// because the bar is centred and everything shifts. SpawnBarDetector exists to stop
+        /// guessing; this stays behind it as something better than doing nothing.
         public static readonly (int X, int Y) DefaultSpawn = (1053, 964);
 
         /// In-game HUD pixel, present once the world has finished loading, approx. #ff007f.
@@ -70,6 +78,13 @@ public sealed class AutoLoginService : IAutoLoginService
     /// How long the character-select screen is left alone before the first click.
     private static readonly TimeSpan CharacterSelectSettle = TimeSpan.FromSeconds(3);
 
+    /// How long to keep looking for the spawn bar after the character has been confirmed. The map
+    /// screen fades in, and on a slow machine it is not there the moment the confirm click lands.
+    private static readonly TimeSpan SpawnBarTimeout = TimeSpan.FromSeconds(20);
+
+    /// Pause after the spawn click, so the game has acted on it before anything else happens.
+    private static readonly TimeSpan SpawnClickSettle = TimeSpan.FromSeconds(4);
+
     /// How long to keep looking for the launcher window after the launcher process was started.
     /// A cold start on a slow disk can take a while to put anything on screen.
     private static readonly TimeSpan LauncherWindowTimeout = TimeSpan.FromSeconds(60);
@@ -78,17 +93,20 @@ public sealed class AutoLoginService : IAutoLoginService
     private readonly IScreenCaptureService _screenCapture;
     private readonly IInputService _inputService;
     private readonly IWindowService _windowService;
+    private readonly IConfigService _configService;
 
     public AutoLoginService(
         IAppLogger logger,
         IScreenCaptureService screenCapture,
         IInputService inputService,
-        IWindowService windowService)
+        IWindowService windowService,
+        IConfigService configService)
     {
         _logger = logger;
         _screenCapture = screenCapture;
         _inputService = inputService;
         _windowService = windowService;
+        _configService = configService;
     }
 
     /// <summary>
@@ -263,16 +281,187 @@ public sealed class AutoLoginService : IAutoLoginService
         await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
     }
 
-    // Only one spawn point is mapped, so there is nothing to choose between. A slot parameter goes
-    // back in here once more of them are measured; until then it was a parameter the method read
-    // and ignored.
+    /// <summary>
+    /// Reads the spawn bar and clicks the best spawn point on it.
+    ///
+    /// "Best" is the first entry of the configured priority list that the player actually has. The
+    /// bar holds a different set of icons for every player and is centred, so there is no position
+    /// that means the same thing twice - which is why this looks at what the icons are rather than
+    /// where they sit.
+    /// </summary>
     private async Task SelectSpawnAsync(IntPtr gameHandle, CancellationToken cancellationToken)
     {
-        var (spawnX, spawnY) = Coords.DefaultSpawn;
-        _logger.Info($"Selecting spawn point at ({spawnX}, {spawnY})");
-        ClickOnWindow(gameHandle, spawnX, spawnY);
-        await Task.Delay(4000, cancellationToken); // Wait for spawn confirmation to process (4s for stability)
+        var layout = ResolveSpawnBarLayout();
+        var (reading, alreadyInWorld) = await WaitForSpawnBarAsync(gameHandle, layout, cancellationToken);
+
+        if (alreadyInWorld)
+        {
+            _logger.Info("Auto-login: the world is already up, so there was no spawn screen to answer.");
+            return;
+        }
+
+        if (reading is null)
+        {
+            // Scaled rather than clicked where it was measured. The rest of the login coordinates
+            // are raw 1080p values, but this one has a window to scale against by the time it runs,
+            // and on a 1440p client the unscaled point lands on the map instead of the bar.
+            var (fallbackX, fallbackY) = layout.ToScreen(Coords.DefaultSpawn.X, Coords.DefaultSpawn.Y);
+            _logger.Warning(
+                $"Auto-login: could not read the spawn bar. Clicking the fixed fallback point " +
+                $"({fallbackX}, {fallbackY}) - whichever spawn point that is for this player.");
+            ClickOnWindow(gameHandle, fallbackX, fallbackY);
+            await Task.Delay(SpawnClickSettle, cancellationToken);
+            return;
+        }
+
+        var selection = SpawnSelector.Select(reading, _configService.Current.Spawn.Priority);
+        LogSpawnBar(reading, selection);
+
+        var chosen = selection.Chosen.Icon;
+        _logger.Info(
+            selection.IsFallback
+                ? $"Auto-login: none of the spawn points in the priority list are on the bar. Taking the " +
+                  $"leftmost icon ({selection.Chosen.Label}) at ({chosen.ScreenX}, {chosen.ScreenY})."
+                : $"Auto-login: selecting spawn point \"{selection.MatchedPriorityId}\" at " +
+                  $"({chosen.ScreenX}, {chosen.ScreenY}), icon {chosen.Slot + 1} of {reading.Count}.");
+
+        ClickOnWindow(gameHandle, chosen.ScreenX, chosen.ScreenY);
+        await Task.Delay(SpawnClickSettle, cancellationToken);
     }
+
+    /// <summary>
+    /// Polls for the spawn bar until it is on screen. The map screen fades in after the character
+    /// is confirmed, and how long that takes depends on the machine, so this is a wait rather than
+    /// a single look.
+    ///
+    /// Gives up either when the wait runs out - the bar is null and the caller falls back - or as
+    /// soon as the HUD is up, which means the game went straight into the world and there is no
+    /// spawn screen to answer. Without that second exit the wait runs to the end and the fallback
+    /// click lands in the world, on whatever happens to be under it.
+    /// </summary>
+    private async Task<(SpawnBarReading? Bar, bool AlreadyInWorld)> WaitForSpawnBarAsync(
+        IntPtr gameHandle,
+        SpawnBarLayout layout,
+        CancellationToken cancellationToken)
+    {
+        _logger.Info(
+            $"Auto-login: looking for the spawn bar - row y={layout.RowY}, centred on x={layout.CenterX}, " +
+            $"{layout.Pitch}px apart.");
+
+        var deadline = DateTime.UtcNow + SpawnBarTimeout;
+        var attempts = 0;
+
+        while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
+        {
+            // The capture reads the desktop, not the game, so whatever is on top is what gets
+            // measured. The game is normally already foreground here, and raising it again is
+            // cheap next to reading a screen full of the wrong window.
+            _windowService.ForceForeground(gameHandle);
+
+            var strip = TryCaptureSpawnStrip(layout);
+            if (strip is not null)
+            {
+                var reading = SpawnBarDetector.Detect(strip, layout);
+                if (reading is not null)
+                {
+                    return (reading, false);
+                }
+            }
+
+            // Checked after the bar, not before: the spawn screen does not light the HUD pixel,
+            // but the order still matters if that ever changes - a bar on screen is the stronger
+            // evidence of the two, because it is the whole bar rather than one pixel.
+            if (IsPixelColor(Coords.HudPixel.X, Coords.HudPixel.Y, Coords.HudColor, Coords.HudTolerance))
+            {
+                return (null, true);
+            }
+
+            await Task.Delay(1000, cancellationToken);
+            LogWaitProgress("the spawn bar", ++attempts, (int)SpawnBarTimeout.TotalSeconds);
+        }
+
+        return (null, false);
+    }
+
+    /// <summary>
+    /// Where to look for the bar. Scaled to the game window when there is one - unlike the fixed
+    /// login coordinates this is a search region, so being approximately right is enough and the
+    /// click that follows goes to a detected icon rather than a guessed position.
+    /// </summary>
+    private SpawnBarLayout ResolveSpawnBarLayout()
+    {
+        var game = _windowService.FindGameWindow();
+        if (game is null)
+        {
+            _logger.Warning("Auto-login: no game window to measure the spawn bar against. Using 1080p defaults.");
+            return SpawnBarLayout.Base;
+        }
+
+        return SpawnBarLayout.ForWindow(game.Left, game.Top, game.Width, game.Height);
+    }
+
+    private PixelGrid? TryCaptureSpawnStrip(SpawnBarLayout layout)
+    {
+        // Clamp to the primary screen: on a windowed game near an edge the strip reaches past it,
+        // and a capture that is not fully on one monitor is refused outright. A clipped strip
+        // still works - the detector drops the slots it cannot see.
+        var (screenWidth, screenHeight) = _windowService.GetScreenSize();
+        var left = Math.Max(0, layout.StripLeft);
+        var top = Math.Max(0, layout.StripTop);
+        var right = Math.Min(screenWidth, layout.StripLeft + layout.StripWidth);
+        var bottom = Math.Min(screenHeight, layout.StripTop + layout.StripHeight);
+
+        if (right - left <= 0 || bottom - top <= 0)
+        {
+            _logger.Warning(
+                $"Auto-login: the spawn bar strip ({layout.StripLeft},{layout.StripTop}) " +
+                $"{layout.StripWidth}x{layout.StripHeight} is off-screen on a {screenWidth}x{screenHeight} display.");
+            return null;
+        }
+
+        try
+        {
+            return _screenCapture.CaptureRegion(left, top, right - left, bottom - top);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Auto-login: failed to capture the spawn bar strip ({ex.Message}).");
+            return null;
+        }
+    }
+
+    /// Logs what was on the bar. Worth the lines: this is the only record of which spawn points a
+    /// player has, and an icon reported as unknown is how a missing template gets noticed.
+    private void LogSpawnBar(SpawnBarReading reading, SpawnSelection selection)
+    {
+        var icons = selection.Icons.Select(icon =>
+        {
+            var label = icon.Match is null
+                ? $"{icon.Label} (closest {DescribeClosest(icon)})"
+                : $"{icon.Label} ({icon.Match.Glyph} {icon.Match.Distance:F2})";
+            return $"[{icon.Icon.Slot + 1}] {label} @{icon.Icon.ScreenX}";
+        });
+
+        _logger.Info(
+            $"Auto-login: spawn bar has {reading.Count} icon(s) on row y={reading.RowY} " +
+            $"(fit {reading.Confidence:F2}): {string.Join("  ", icons)}");
+
+        foreach (var icon in selection.Icons.Where(candidate => candidate.Id is null))
+        {
+            // The ascii art is what makes an unrecognised icon actionable: it is the glyph as the
+            // matcher saw it, so it shows whether this is an icon with no template or a slot that
+            // was misdetected in the first place.
+            _logger.Warning(
+                $"Auto-login: spawn icon {icon.Icon.Slot + 1} at ({icon.Icon.ScreenX}, {icon.Icon.ScreenY}) " +
+                $"is not in the icon catalog. Signature {icon.Icon.Signature.ToHex()}\n" +
+                icon.Icon.Signature.ToAsciiArt());
+        }
+    }
+
+    private static string DescribeClosest(IdentifiedSpawnIcon icon) =>
+        icon.Closest is null
+            ? "the icon catalog is empty"
+            : $"{icon.Closest.Glyph} at {icon.Closest.Distance:F2}";
 
     /// <summary>
     /// Waits for the in-game HUD. Returns false if it never turned up, which means the world did

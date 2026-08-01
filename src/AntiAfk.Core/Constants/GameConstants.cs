@@ -45,6 +45,24 @@ public static class GameConstants
     public const byte PreStartB = 0x7E;
     public const int PreStartTolerance = 40;
 
+    // Spawn-point bar, the row of round icons along the bottom of the map screen shown after a
+    // character has been confirmed. How many icons a player gets depends on what they own, so the
+    // only fixed things are the pitch, the row and the fact that the row is centred - which is
+    // exactly what SpawnBarDetector fits against. Measured at 1920x1080 fullscreen.
+    public const int BaseSpawnBarCenterX = BaseCenterX;
+    public const int BaseSpawnBarRowY = 965;
+    public const int BaseSpawnIconPitch = 96;
+    public const int BaseSpawnIconDiameter = 72;
+
+    /// Side of the square around an icon centre that the glyph fits inside, used for signatures.
+    /// The glyphs measure up to 31x33 here, so this leaves a few pixels of margin on each side
+    /// without wasting the signature grid on empty space.
+    public const int BaseSpawnGlyphBox = 44;
+
+    /// Most icons any player can have. The bar is centred, so this also sets how wide a strip of
+    /// screen has to be captured to be sure the whole bar is in it.
+    public const int MaxSpawnIcons = 12;
+
     public const string GameProcessName = "GTA5";
 
     // The launcher ships as "Majestic Launcher.exe", so the process name is the file name without

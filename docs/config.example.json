@@ -19,6 +19,17 @@
     "postTurnDelay": 0.5,
     "postWalkDelay": 0.2
   },
+  "spawn": {
+    "priority": [
+      "personal_house",
+      "personal_apartment",
+      "family_house",
+      "family_office",
+      "family_mansion",
+      "exit_point",
+      "starting_spawn"
+    ]
+  },
   "update": {
     "enabled": true,
     "gitHubOwner": "BxdiS",

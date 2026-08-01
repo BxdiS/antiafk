@@ -150,6 +150,10 @@ public sealed class SettingsForm : Form
             PostTurnDelay = source.Timings.PostTurnDelay,
             PostWalkDelay = source.Timings.PostWalkDelay
         },
+        Spawn = new SpawnSettings
+        {
+            Priority = [.. source.Spawn.Priority]
+        },
         Update = new UpdateSettings
         {
             Enabled = source.Update.Enabled,
