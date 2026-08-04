@@ -40,7 +40,9 @@ Display scaling needs to be 100%. Click coordinates are real pixels, so anything
 
 ## More detail
 
-[docs/GUIDE.md](docs/GUIDE.md) covers building from source, configuration, how auto-updates work, and the code signing situation.
+[docs/GUIDE.en.md](docs/GUIDE.en.md) covers building from source, configuration, how auto-updates work, and the code signing situation.
+
+[CONTRIBUTING.en.md](CONTRIBUTING.en.md) is for sending a change: how branches and PRs work here, and which parts of the code to leave alone.
 
 ## License
 

@@ -6,8 +6,8 @@
 ## Detail
 
 <!-- Delete this heading if the change doesn't have any. Otherwise: the root cause, an
-     approach that was tried and rejected, an edge case that turned out to matter.
-     Say what you did not verify, too. -->
+     approach you tried and rejected, an edge case that turned out to matter.
+     Say what you did NOT verify, too. -->
 
 ## Testing
 
@@ -16,7 +16,8 @@
 
 ## Checklist
 
-- [ ] I have read [CLAUDE.md](../CLAUDE.md), including the **Danger zones** section
-- [ ] This PR does not touch the input timing in `InputService`, the DPI or single-file publish settings in `AntiAfk.App.csproj`, or the coordinates in `GameConstants` — or it does, and the detail section says what was observed
+- [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md), including **Опасные зоны** / [Danger zones](../CONTRIBUTING.en.md#danger-zones)
+- [ ] This PR does not touch the input timing in `InputService`, the DPI or single-file publish settings in `AntiAfk.App.csproj`, or the coordinates in `GameConstants` — or it does, and the detail section says what I observed
+- [ ] I ran the app and confirmed the change does what this PR says
 - [ ] Docs updated if behaviour changed, both language versions of any bilingual pair
 - [ ] Title follows Conventional Commits: `type: description`, imperative, lowercase, under 72 characters
