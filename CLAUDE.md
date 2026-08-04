@@ -1,49 +1,43 @@
 # Notes for Claude
 
-## Branches and PRs
+The contribution rules live in CONTRIBUTING.en.md and they apply to you exactly as they apply to a person: branch and PR workflow, Conventional Commits titles, how to write a description, danger zones, documentation, language, releases. Read it before making any change.
 
-Don't commit to `main` directly. Every change goes through a branch and a PR, even small ones.
+@CONTRIBUTING.en.md
 
-Branch naming: `feat/` for features, `fix/` for fixes, `docs/` for documentation. Keep it descriptive — `feat/auto-login`, `fix/log-console-crash`.
+`CONTRIBUTING.md` is the Russian half of that pair. Change one and you change both, in the same commit.
 
-Open the PR right after pushing, don't leave the branch sitting there:
+## If you read nothing else
 
-```bash
-gh pr create --title "Your PR Title" --body "..." --head your-branch --base main
-```
+The six danger zones, by name. Full reasoning for each is in CONTRIBUTING.en.md; don't act on this list alone.
 
-The description should say what changed and why. A list of touched files isn't a description.
+- The sleeps in `InputService.ClickScreen`, and nothing logged between the steps
+- DPI awareness stays at the WinForms default, SystemAware
+- Native AOT is unusable — `RichTextBox` COM interop
+- The single-file publish settings in `AntiAfk.App.csproj`
+- `<Version>` in that csproj is a placeholder the release workflow overwrites
+- Coordinates in `GameConstants` are 1920×1080 and go through `CoordinateScaler`
 
-**Never add tool attribution lines** like "🤖 Generated with Claude Code" or "Co-authored-by: Claude Fable 5" or similar metadata. Focus on the technical content — what the code does, why it matters, and any relevant context. No AI or tool branding in commits or PR descriptions.
+## Specific to you
 
-Once it's merged, clean up:
+**Never add tool attribution lines** — no "🤖 Generated with Claude Code", no "Co-authored-by: Claude Fable 5", no similar metadata, in commits or PR descriptions. Focus on the technical content: what the code does, why it matters, and any relevant context. No AI or tool branding anywhere in the repository.
+
+CONTRIBUTING.en.md tells a contributor to run the app and report what they saw. You usually cannot — this needs a real game window and a real cursor. When that is the case, say so plainly in the PR: what you verified by reading, what remains unverified, and what a human would have to run to confirm it. Don't describe a change as fixed when nobody has watched it work. That failure has a history here, and it is written up in the danger zones section.
+
+Clean up after a merge:
 
 ```bash
 git branch -D branch-name
 git push origin --delete branch-name
 ```
 
-Only `main` should survive long-term.
+Only `main` survives long-term.
 
-## Before opening a PR
-
-Code compiles without warnings. Tests pass. No obvious crashes. Style matches whatever the surrounding file is already doing.
-
-## Documentation
-
-When behavior changes, update the relevant docs:
-- **GUIDE.md** and **GUIDE.en.md** — user-facing setup, tray menu, troubleshooting
-- **ROADMAP.md** — for feature additions or major changes in direction
-- **README.md** and **README.en.md** — if something about what the app does or how to get it changes
-
-This file (CLAUDE.md) itself should stay current if the workflow changes.
-
-## Configuration
-
-**config.example.json** is a reference for what config fields exist and what they do. If you add or remove fields, update this file so it stays in sync with the actual code.
-
-## Tooling
+## Tooling on this machine
 
 Needs `git` and `gh` on PATH, with `gh` authenticated (`gh auth login`, or a `GITHUB_TOKEN` in the environment). If something's missing, say so instead of working around it.
 
-GitHub CLI is installed at: `C:\Program Files\GitHub CLI\gh.exe`
+GitHub CLI is at `C:\Program Files\GitHub CLI\gh.exe`.
+
+`gh pr create --body "..."` and `git commit -m "..."` break in PowerShell when the text contains double quotes — it re-parses them and splits the argument. Write the text to a file and use `--body-file` or `git commit -F`.
+
+This file and CONTRIBUTING should stay current if the workflow changes.
