@@ -27,11 +27,17 @@ internal static class Program
             return;
         }
 
+        // Both of these are built before the single-instance check so the "already running" message
+        // comes out in the language the config file asks for, and so everything the config loader
+        // has to say about that file is already in the buffer the log console shows.
+        var logger = new MemoryLogger();
+        var config = ConfigFile.Load(logger);
+
         using var mutex = new Mutex(true, AppBranding.MutexName, out var createdNew);
         if (!createdNew)
         {
             MessageBox.Show(
-                CreateLocalization().Get("notify.already_running"),
+                CreateLocalization(config.Config.Language).Get("notify.already_running"),
                 AppBranding.DisplayName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -41,7 +47,7 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         try
         {
-            var context = CreateContext();
+            var context = CreateContext(logger, config);
             Application.Run(context);
         }
         catch (Exception ex)
@@ -54,26 +60,24 @@ internal static class Program
         }
     }
 
-    // The single-instance check runs before any service exists, so it builds its own localization
-    // rather than showing an English string the translation table already has a key for.
-    private static LocalizationService CreateLocalization()
+    // The single-instance check runs before the tray context exists, so it builds its own
+    // localization rather than showing an English string the translation table already has a key for.
+    private static LocalizationService CreateLocalization(string language)
     {
         var localization = new LocalizationService();
-        localization.SetLanguage(new ConfigService().Current.Language);
+        localization.SetLanguage(language);
         return localization;
     }
 
-    private static TrayApplicationContext CreateContext()
+    private static TrayApplicationContext CreateContext(IAppLogger logger, LoadedConfig loadedConfig)
     {
         try
         {
-            var memoryLogger = new MemoryLogger();
             var logConsole = new LogConsoleService();
-            var logger = memoryLogger;
 
             try
             {
-                var configService = new ConfigService();
+                var configService = new ConfigService(loadedConfig, logger);
                 var localization = new LocalizationService();
                 localization.SetLanguage(configService.Current.Language);
 
