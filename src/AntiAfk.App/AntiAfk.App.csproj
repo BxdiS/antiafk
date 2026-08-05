@@ -11,7 +11,12 @@
     <ApplicationTitle>AntiAFK</ApplicationTitle>
     <Product>AntiAFK</Product>
     <Company>BxdiS</Company>
-    <Description>AntiAFK marketplace activity bot</Description>
+    <!-- Ends up as AssemblyDescriptionAttribute and as the Comments field of the Win32 version
+         resource - verified by reading both off a build, not assumed. Not FileDescription: that
+         comes from AssemblyTitle and reads "AntiAFK". Either way the string is embedded in the
+         shipped exe and legible to anything scanning it, and the old value ("marketplace activity
+         bot") named an internal mechanism in words that invite a heuristic to draw conclusions. -->
+    <Description>AntiAFK app for Majestic RP</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- DPI awareness is deliberately left at the WinForms default (SystemAware).
 

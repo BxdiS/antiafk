@@ -120,7 +120,11 @@ Auto-generated release notes just list commits. If you want something more human
 
 `AntiAFK.exe` isn't signed, so SmartScreen complains on the first run. That's normal for any unfamiliar binary and has nothing to do with how it's built.
 
-The plan is to get a free signature from [SignPath](https://signpath.org/). The project is under [GPL-3.0](../LICENSE), and an OSI-compatible license is their main requirement (they don't sign proprietary or non-OSI ones). Once approved, a step in CI will sign `publish/AntiAFK.exe` directly after `dotnet publish` — without `vpk --signTemplate`, which was leftover from the old Velopack scheme.
+The plan is to get a free signature from [SignPath Foundation](https://signpath.org/), and an application is in. Once approved, a step in CI will sign `publish/AntiAFK.exe` directly after `dotnet publish` — without `vpk --signTemplate`, which was leftover from the old Velopack scheme.
+
+An OSI-compatible license is the requirement people usually hear about, and [GPL-3.0](../LICENSE) clears it, but it is nowhere near the whole list. The certificate is issued in SignPath Foundation's own name, so what they are really weighing is whether they want their name on this binary. Their [terms](https://signpath.org/terms) run to project reputation, verifiable builds, declared team roles, a published code signing policy, and a clause about malware and potentially unwanted programs that a tool automating game input has to be looked at under honestly.
+
+The policy they require lives in [Code signing policy](../README.en.md#code-signing-policy) in the README — roles, and what the update check sends. When behaviour there changes, that section changes with it, in both languages.
 
 ## Troubleshooting
 
