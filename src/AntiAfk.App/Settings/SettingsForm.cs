@@ -127,39 +127,10 @@ public sealed class SettingsForm : Form
         }
     }
 
-    private static AppConfig CloneConfig(AppConfig source) => new()
-    {
-        Language = source.Language,
-        LauncherPath = source.LauncherPath,
-        Timings = new TimingSettings
-        {
-            BackgroundClickDelay = new RandomRange(source.Timings.BackgroundClickDelay.Min, source.Timings.BackgroundClickDelay.Max),
-            CycleSleepDelay = new RandomRange(source.Timings.CycleSleepDelay.Min, source.Timings.CycleSleepDelay.Max),
-            WalkDuration = new RandomRange(source.Timings.WalkDuration.Min, source.Timings.WalkDuration.Max),
-            TurnKeyDuration = new RandomRange(source.Timings.TurnKeyDuration.Min, source.Timings.TurnKeyDuration.Max),
-            TurnGapJitter = new RandomRange(source.Timings.TurnGapJitter.Min, source.Timings.TurnGapJitter.Max),
-            TurnGapMeanFirst = source.Timings.TurnGapMeanFirst,
-            TurnGapMeanSecond = source.Timings.TurnGapMeanSecond,
-            FocusSwitchDelay = source.Timings.FocusSwitchDelay,
-            InitFocusDelay = source.Timings.InitFocusDelay,
-            MarketplaceOpenDelay = source.Timings.MarketplaceOpenDelay,
-            TabletOpenDelay = source.Timings.TabletOpenDelay,
-            EscDelay = source.Timings.EscDelay,
-            WarningClickDelay = source.Timings.WarningClickDelay,
-            MapCloseDelay = source.Timings.MapCloseDelay,
-            PostTurnDelay = source.Timings.PostTurnDelay,
-            PostWalkDelay = source.Timings.PostWalkDelay
-        },
-        Spawn = new SpawnSettings
-        {
-            Priority = [.. source.Spawn.Priority]
-        },
-        Update = new UpdateSettings
-        {
-            Enabled = source.Update.Enabled,
-            GitHubOwner = source.Update.GitHubOwner,
-            GitHubRepo = source.Update.GitHubRepo,
-            CheckIntervalHours = source.Update.CheckIntervalHours
-        }
-    };
+    // The window edits a copy so that Cancel really cancels, and Save hands the whole copy back -
+    // which means everything the window does not show has to survive the round trip. This used to
+    // be twenty-odd hand-copied fields, and every setting added anywhere else had to be remembered
+    // here too; a forgotten one reset that setting to its default the moment the user pressed Save,
+    // silently. ConfigFile.Clone copies whatever AppConfig currently has.
+    private static AppConfig CloneConfig(AppConfig source) => ConfigFile.Clone(source);
 }

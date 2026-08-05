@@ -4,7 +4,7 @@
 
 Download `AntiAFK.exe` from [releases](https://github.com/BxdiS/antiafk/releases) and run it. That's it — the app is portable, single file, no installer, no admin rights needed.
 
-Important detail: settings, logs, and cycle progress live only in the process memory. Every startup is a clean slate, nothing gets written to disk. The only exception is a couple of temporary files for a few seconds when applying an update.
+Important detail: logs, cycle progress and anything changed in the settings window live only in the process memory. The app writes nothing to disk apart from a couple of temporary files for a few seconds while an update is applied. It does *read* one optional file — see [Configuration](#configuration).
 
 ## Tray
 
@@ -71,9 +71,33 @@ The match thresholds come from measurement rather than taste. The test: each of 
 
 ## Configuration
 
-Settings are set via tray → **Settings** and don't persist to disk. The structure of config fields is documented in [config.example.json](config.example.json) — it's a reference, not a file the app reads.
+Most people never need this. Language and launcher path are in tray → **Settings**, and those last until the app closes.
 
-`launcherPath` empty means auto-detect the launcher in standard Windows paths. UI coordinates and timings are hardcoded; you can't change them through config. Same goes for `spawn.priority`: the field exists, but for now the only way to set it is the default in code — a config file is a planned feature ([ROADMAP](../ROADMAP.md), v1.5.0).
+Everything else lives in an optional file: put `AntiAFK.json` next to `AntiAFK.exe` and it's read on startup. There is none by default, the app never creates one, and it never writes to one — so a config stays exactly as you wrote it, comments included. Applying an update moves a new exe over the old one and leaves the rest of the folder alone, so the file survives auto-updates.
+
+[config.example.json](config.example.json) lists every field with its default. Copy the whole thing or write only the part you care about — every section is optional and anything left out keeps its built-in value. This is a complete, valid config:
+
+```json
+{
+  "spawn": { "priority": ["family_office", "personal_house"] }
+}
+```
+
+Comments and trailing commas are accepted, even though strict JSON forbids both.
+
+| Field | What it does |
+|-------|--------------|
+| `language` | `ru` or `en` |
+| `launcherPath` | Empty means auto-detect the launcher in the standard Windows paths |
+| `spawn.priority` | Spawn points in the order you want them, best first, using the ids from the table above. An empty list always takes the leftmost icon on the bar |
+| `timings.*` | How long the bot waits for the game between steps, in seconds. A `{min, max}` pair is drawn at random inside the range |
+| `update.*` | Whether to check for updates and how often |
+
+Screen coordinates aren't configurable, and neither are the delays inside a single click. Those live in `InputService` for a reason: they're what keeps a click where it was aimed, and shortening them is how clicks start landing on the neighbouring button.
+
+Since the file is read and never written, a change in the settings window that contradicts it lasts until restart and no further. The log says so when it happens, naming the field.
+
+Startup is where the log earns its keep: which file was read or that there wasn't one, then a line per problem — a key that doesn't exist, a spawn id this build can't recognise, a range with min above max. None of it stops the app starting. It falls back to the built-in value and says which and why.
 
 ## Building from source
 
@@ -89,7 +113,7 @@ How the code is organized:
 ```
 src/
   AntiAfk.Core/           — engine, coordinates, state
-  AntiAfk.Infrastructure/ — WinAPI, screen work, config and logs (both in memory)
+  AntiAfk.Infrastructure/ — WinAPI, screen work, reading the config file, logs (in memory)
   AntiAfk.App/            — tray, settings window (WinForms), updates
 ```
 
@@ -132,4 +156,5 @@ The plan is to get a free signature from [SignPath](https://signpath.org/). The 
 | Engine stopped on its own | After five crashes in a row it stops restarting instead of looping the same failure. The cause is in the log console; Start tries again |
 | Updates aren't coming | Latest release must be published (not draft, not pre-release) and contain `AntiAFK.exe`. Without an `AntiAFK.exe.sha256` next to it the update is discarded as unverifiable |
 | Workflow didn't run | Tag must start with `v` |
-| Settings disappeared after restart | That's by design — portable version keeps nothing between runs |
+| Settings disappeared after restart | The settings window keeps nothing between runs, by design. Put the values in `AntiAFK.json` next to the exe to make them stick |
+| Something in `AntiAFK.json` does nothing | The first lines of the log name every key that doesn't exist and every value that had to be corrected. A misspelled key reads as a key that isn't there, which is exactly what that warning is for |

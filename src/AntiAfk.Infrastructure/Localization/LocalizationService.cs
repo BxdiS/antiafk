@@ -16,6 +16,8 @@ public sealed class LocalizationService
         TypeInfoResolver = new LocalizationJsonContext()
     };
 
+    private static readonly string[] SupportedLanguageCodes = ["ru", "en"];
+
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new(StringComparer.OrdinalIgnoreCase);
     private string _language = "ru";
 
@@ -102,7 +104,11 @@ public sealed class LocalizationService
         return key;
     }
 
-    public IReadOnlyList<string> SupportedLanguages => ["ru", "en"];
+    /// The languages this build ships, reachable without an instance so that ConfigFile can check a
+    /// hand-written language code against them before anything is constructed.
+    public static IReadOnlyList<string> Supported => SupportedLanguageCodes;
+
+    public IReadOnlyList<string> SupportedLanguages => SupportedLanguageCodes;
 
     private void Load(string language, string json)
     {
