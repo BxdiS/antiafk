@@ -24,11 +24,56 @@ Download happens in the background; the tray icon turns blue when there's someth
 
 Before any of that the downloaded file is checked against `AntiAFK.exe.sha256` from the same release. If the checksum doesn't match, or the release has no checksum file at all, the update is discarded — the app overwrites itself and runs the result, so "couldn't verify" is not treated as "verified" here.
 
+## Picking a spawn point
+
+Once a character is confirmed the game shows the map with a row of round icons along the bottom — the spawn points. Everyone has a different set, and the row is centred, so gaining one icon shifts every other one: "third from the left" means a different place for two different players.
+
+So the bot doesn't click a position, it looks at what the icons are:
+
+1. It captures the strip along the bottom and fits an icon count to it — the one where every slot is filled and the positions just past both ends are empty.
+2. Each icon is compared against the reference glyphs built into the app.
+3. It clicks the first entry of `spawn.priority` the player actually has.
+
+What the app can recognise:
+
+| id | What it is | Icon |
+|----|------------|------|
+| `exit_point` | Where you logged out | map with a pin |
+| `starting_spawn` | The spawn a new character starts with | aeroplane |
+| `personal_house` | Your own house | house with a roof |
+| `personal_apartment` | Your own flat | tower block |
+| `family_house` | Family house | two people |
+| `family_mansion` | Family mansion | two people — the very same icon |
+| `family_office` | Family office | office block |
+
+Default order: `personal_house` → `personal_apartment` → `family_house` → `family_office` → `family_mansion` → `exit_point` → `starting_spawn`.
+
+**About the house and the mansion.** The game draws them with the same icon — not a similar one, the same one: their pixel masks differ by 3 pixels out of 1936, which is the anti-aliasing of a half-pixel offset. No amount of image recognition will separate them.
+
+They are separated by counting instead. A mansion cannot be owned without the house, and it sits before it on the bar, so a single two-person icon is always the house and two of them are the mansion followed by the house. That is why names sharing a glyph line up with the end of the list rather than the start.
+
+If none of them are on the bar, the leftmost icon is used. If the bar couldn't be read at all, it falls back to the old fixed click at `(1053, 964)`.
+
+The log shows everything it saw:
+
+```
+Auto-login: spawn bar has 5 icon(s) on row y=964 (fit 1.00): [1] exit_point (pin 0.20) @768  [2] starting_spawn (airplane 0.03) @864  [3] family_house (people 0.00) @960  [4] family_mansion (people 0.02) @1056  [5] family_office (office 0.03) @1152
+Auto-login: selecting spawn point "exit_point" at (768, 964), icon 1 of 5.
+```
+
+An icon with no reference in this build is logged as `unknown`, together with its signature and a picture of the glyph — enough to add it to `SpawnIconCatalog` as one more line. The tool prints that line for you:
+
+```bash
+dotnet run --project tools/GenerateSpawnIcons -- screenshot.png
+```
+
+The match thresholds come from measurement rather than taste. The test: each of the fourteen icons was identified by a catalog with its own reference removed. All fourteen came out right — worst distance to their own glyph 0.22, closest different glyph 0.36, and the 0.30 threshold sits between the two. So an icon this build has no reference for comes back `unknown` rather than as the nearest building: failing to recognise one costs a spawn point, recognising it wrongly spawns the player somewhere they didn't ask for.
+
 ## Configuration
 
 Settings are set via tray → **Settings** and don't persist to disk. The structure of config fields is documented in [config.example.json](config.example.json) — it's a reference, not a file the app reads.
 
-`launcherPath` empty means auto-detect the launcher in standard Windows paths. UI coordinates and timings are hardcoded; you can't change them through config.
+`launcherPath` empty means auto-detect the launcher in standard Windows paths. UI coordinates and timings are hardcoded; you can't change them through config. Same goes for `spawn.priority`: the field exists, but for now the only way to set it is the default in code — a config file is a planned feature ([ROADMAP](../ROADMAP.md), v1.5.0).
 
 ## Building from source
 
@@ -83,6 +128,7 @@ The plan is to get a free signature from [SignPath](https://signpath.org/). The 
 |---------|---------------|
 | Game not found | Need the `GTA5.exe` process or Majestic RP client window with version in the title |
 | Clicks land in the wrong place | The log starts with `Display ...` lines showing each monitor's scale. Anything other than 100% shifts the coordinates — run the game on a 100% display |
+| Spawned in the wrong place | The `spawn bar has N icon(s)` log line shows what the bot saw and what it took each icon to be. `unknown` means this build has no reference for it — the signature and glyph are logged next to it, which is what adding one takes |
 | Engine stopped on its own | After five crashes in a row it stops restarting instead of looping the same failure. The cause is in the log console; Start tries again |
 | Updates aren't coming | Latest release must be published (not draft, not pre-release) and contain `AntiAFK.exe`. Without an `AntiAFK.exe.sha256` next to it the update is discarded as unverifiable |
 | Workflow didn't run | Tag must start with `v` |

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AntiAfk.Core\AntiAfk.Core.csproj" />
+    <ProjectReference Include="..\..\src\AntiAfk.Infrastructure\AntiAfk.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

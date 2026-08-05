@@ -12,3 +12,6 @@ Releases/
 
 # App data (local dev)
 .env
+
+# Reference screenshots for tools/GenerateSpawnIcons (only the generated hex table is committed)
+img/

@@ -7,9 +7,32 @@ public sealed class AppConfig
     public string Language { get; set; } = "ru";
     public string LauncherPath { get; set; } = string.Empty;
     public TimingSettings Timings { get; set; } = TimingSettings.CreateDefault();
+    public SpawnSettings Spawn { get; set; } = new();
     public UpdateSettings Update { get; set; } = new();
 
     public static AppConfig CreateDefault() => new();
+}
+
+public sealed class SpawnSettings
+{
+    /// <summary>
+    /// Spawn points to use after logging in, best first. The first one that is actually on the
+    /// player's bar is the one clicked; if none of them are, the leftmost icon is used.
+    ///
+    /// The ids are the ones in SpawnIconCatalog - they name what the icon is, not where it sits,
+    /// because the bar is centred and every player has a different set, so position means nothing.
+    /// An empty list turns priority off and always takes the leftmost icon.
+    /// </summary>
+    public List<string> Priority { get; set; } =
+    [
+        "personal_house",
+        "personal_apartment",
+        "family_house",
+        "family_office",
+        "family_mansion",
+        "exit_point",
+        "starting_spawn"
+    ];
 }
 
 public sealed class UpdateSettings

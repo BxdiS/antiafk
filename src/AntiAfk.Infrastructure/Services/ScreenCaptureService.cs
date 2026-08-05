@@ -1,5 +1,8 @@
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Vision;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace AntiAfk.Infrastructure.Services;
@@ -68,6 +71,85 @@ public sealed class ScreenCaptureService : IScreenCaptureService
         {
             throw new InvalidOperationException($"Failed to capture region ({x1},{y1})-({x2},{y2}): {ex.Message}", ex);
         }
+    }
+
+    public PixelGrid CaptureRegion(int screenX, int screenY, int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(width), $"Cannot capture a {width}x{height} region.");
+        }
+
+        var region = new Rectangle(screenX, screenY, width, height);
+
+        // Same rule as RegionContainsColor: a capture that spans two monitors, or a gap between
+        // them, comes back with black where nothing was covered, and black reads as a perfectly
+        // good dark icon disc to whoever is looking at these pixels.
+        if (!IsWithinSingleScreen(region))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(screenX),
+                $"Region ({screenX},{screenY}) {width}x{height} is not fully contained in a single monitor. " +
+                $"Monitors: {DescribeScreens()}");
+        }
+
+        try
+        {
+            using var bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                graphics.CopyFromScreen(screenX, screenY, 0, 0, new Size(width, height));
+            }
+
+            return ToPixelGrid(bitmap, screenX, screenY);
+        }
+        catch (Exception ex) when (ex is not ArgumentOutOfRangeException)
+        {
+            throw new InvalidOperationException(
+                $"Failed to capture region ({screenX},{screenY}) {width}x{height}: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Copies a 24bpp bitmap into a PixelGrid. Goes through LockBits rather than GetPixel: the
+    /// spawn bar strip is around 150k pixels, and GetPixel per pixel on that takes long enough to
+    /// be visible in the login sequence.
+    /// </summary>
+    public static PixelGrid ToPixelGrid(Bitmap bitmap, int originX, int originY)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        var rgb = new byte[width * height * 3];
+
+        var data = bitmap.LockBits(
+            new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+
+        try
+        {
+            var row = new byte[data.Stride];
+
+            for (var y = 0; y < height; y++)
+            {
+                Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, data.Stride);
+
+                for (var x = 0; x < width; x++)
+                {
+                    // Format24bppRgb is laid out B, G, R.
+                    var source = x * 3;
+                    var target = (y * width + x) * 3;
+                    rgb[target] = row[source + 2];
+                    rgb[target + 1] = row[source + 1];
+                    rgb[target + 2] = row[source];
+                }
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
+
+        return new PixelGrid(originX, originY, width, height, rgb);
     }
 
     // The virtual desktop is a union of monitor rectangles, not a single rectangle anchored at
