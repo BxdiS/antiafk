@@ -58,14 +58,13 @@ Everything lands through a pull request rather than a push to `main`, including 
 
 ### Privacy policy
 
-AntiAFK has no analytics, no crash reporting and no account of any kind. It collects nothing about you and sends nothing on your behalf.
+AntiAFK has no analytics, no crash reporting and no account of any kind. It collects nothing and sends nothing on your behalf.
 
 It makes one outbound request, to see whether a newer release exists:
 
 - `https://api.github.com/repos/BxdiS/antiafk/releases/latest`, once at startup and every 6 hours after that.
-- A plain HTTPS GET with the user agent `antiafk-updater` and nothing else. No identifier, no machine details, nothing about the game or your account.
-- GitHub sees the IP address it came from, the same as for any download.
-- If there is a newer release, `AntiAFK.exe` and its `.sha256` are downloaded to a temporary folder and the checksum is verified. A file that fails verification is deleted rather than kept.
+- An HTTPS GET with the user agent `antiafk-updater`. No identifier, no machine details, nothing about the game and/or your account.
+- If there is a newer release, `AntiAFK.exe` and its `.sha256` are downloaded to a temporary folder and the checksum is verified. A file that fails verification is deleted.
 - Installing it — swapping the executable and restarting — happens only when you click Update in the tray menu.
 
 The tray menu has no switch for it. Blocking `api.github.com` in a firewall stops it: the failure goes to the log and the app carries on.
