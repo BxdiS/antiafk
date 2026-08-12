@@ -141,7 +141,14 @@ public sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        _settingsWindow = new SettingsForm(_configService, _localization);
+        void OnSettingsSaved(string message)
+        {
+            _notifyIcon.BalloonTipTitle = AppBranding.DisplayName;
+            _notifyIcon.BalloonTipText = message;
+            _notifyIcon.ShowBalloonTip(3000);
+        }
+
+        _settingsWindow = new SettingsForm(_configService, _localization, OnSettingsSaved);
         _settingsWindow.FormClosed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
