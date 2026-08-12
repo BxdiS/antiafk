@@ -21,11 +21,13 @@ public sealed class InputService : IInputService
     ];
 
     private readonly IWindowService _windowService;
+    private readonly IAppLogger _logger;
     private readonly Random _random = new();
 
-    public InputService(IWindowService windowService)
+    public InputService(IWindowService windowService, IAppLogger logger)
     {
         _windowService = windowService;
+        _logger = logger;
     }
 
     public void SendKey(ushort virtualKey, double durationSeconds)
@@ -77,6 +79,8 @@ public sealed class InputService : IInputService
         var finalY = clientY + _random.Next(-4, 5);
         var lParam = NativeMethods.MakeLParam(finalX, finalY);
 
+        _logger.Info($"MoveAndClickBackground: target client ({clientX}, {clientY}), sending click at ({finalX}, {finalY})");
+
         SendMouseMessage(windowHandle, NativeMethods.WmMousemove, IntPtr.Zero, lParam);
         // 200 ms (was 50) between "cursor arrived" and mouse-down. 50 ms was short enough that
         // the click sometimes registered before the target element noticed the hover, which is
@@ -94,6 +98,9 @@ public sealed class InputService : IInputService
     // Debug.WriteLine below. Keep this body free of anything that can block or yield.
     public void ClickScreen(int screenX, int screenY)
     {
+        // Logging here, before the sequence, is the one safe place. See the comment block below
+        // about why nothing may go between the steps.
+        _logger.Info($"ClickScreen: aiming at ({screenX}, {screenY})");
         try
         {
             // Deliberately no Debug.WriteLine in here.
@@ -111,8 +118,7 @@ public sealed class InputService : IInputService
             // pointer somewhere else. The fixed 300/100/200 ms below are only meaningful if nothing
             // else is inserted between them.
             //
-            // If this ever needs tracing again, log it through IAppLogger before or after the click,
-            // never between the steps.
+            // Logging goes before or after the sequence, through IAppLogger. Never between the steps.
             System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screenX, screenY);
             Thread.Sleep(300); // Time for the cursor to physically arrive before the press.
             NativeMethods.mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
@@ -124,6 +130,19 @@ public sealed class InputService : IInputService
         {
             System.Diagnostics.Debug.WriteLine($"[InputService.ClickScreen] Exception: {ex.Message}");
             throw;
+        }
+
+        // After the full sequence: check whether the cursor is still where it was placed. A
+        // mismatch means either the game moved it in response to the click (expected in some UI
+        // flows) or something else grabbed the cursor mid-sequence (unexpected and worth knowing).
+        var actual = System.Windows.Forms.Cursor.Position;
+        if (actual.X == screenX && actual.Y == screenY)
+        {
+            _logger.Info($"ClickScreen: cursor at ({actual.X}, {actual.Y}) — landed as aimed");
+        }
+        else
+        {
+            _logger.Info($"ClickScreen: cursor at ({actual.X}, {actual.Y}) after click, aimed at ({screenX}, {screenY})");
         }
     }
 
