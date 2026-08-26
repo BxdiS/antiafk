@@ -11,6 +11,7 @@ public sealed class SettingsForm : Form
     private readonly IConfigService _configService;
     private readonly LocalizationService _localization;
     private readonly AppConfig _workingCopy;
+    private readonly Action<string>? _onSettingsSaved;
 
     private readonly Label _languageLabel;
     private readonly ComboBox _languageCombo;
@@ -21,11 +22,12 @@ public sealed class SettingsForm : Form
     private readonly Button _cancelButton;
     private readonly Label _creditsText;
 
-    public SettingsForm(IConfigService configService, LocalizationService localization)
+    public SettingsForm(IConfigService configService, LocalizationService localization, Action<string>? onSettingsSaved = null)
     {
         _configService = configService;
         _localization = localization;
         _workingCopy = CloneConfig(configService.Current);
+        _onSettingsSaved = onSettingsSaved;
 
         Text = AppBranding.DisplayName;
         Width = 560;
@@ -106,6 +108,15 @@ public sealed class SettingsForm : Form
     {
         _workingCopy.Language = _languageCombo.SelectedItem?.ToString() ?? "ru";
         _workingCopy.LauncherPath = _launcherPathText.Text.Trim();
+
+        // Subscribe to the event so we can notify the user if a file was created.
+        Action<string>? handler = null;
+        handler = message =>
+        {
+            _onSettingsSaved?.Invoke(message);
+            _configService.SettingsSaved -= handler;
+        };
+        _configService.SettingsSaved += handler;
 
         _configService.Save(_workingCopy);
         _localization.SetLanguage(_workingCopy.Language);

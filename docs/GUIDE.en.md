@@ -4,7 +4,7 @@
 
 Download `AntiAFK.exe` from [releases](https://github.com/BxdiS/antiafk/releases) and run it. That's it — the app is portable, single file, no installer, no admin rights needed.
 
-Important detail: logs, cycle progress and anything changed in the settings window live only in the process memory. The app writes nothing to disk apart from a couple of temporary files for a few seconds while an update is applied. It does *read* one optional file — see [Configuration](#configuration).
+Important detail: logs and cycle progress live only in the process memory. The app writes to disk in two situations: on the first Save in the settings window, `AntiAFK.json` is created next to the exe with the current full configuration; and a couple of temporary files appear for a few seconds while an update is applied. It also *reads* one optional file — see [Configuration](#configuration).
 
 ## Tray
 
@@ -12,7 +12,7 @@ Important detail: logs, cycle progress and anything changed in the settings wind
 |-----------|-------------|
 | Start / Stop | Starts and pauses the bot. Cycle state persists until you restart the app |
 | Update | Shows when an update has been downloaded. The app replaces itself with the new version and restarts |
-| Settings | Language (RU/EN) and launcher path. Take effect until the app closes |
+| Settings | Language (RU/EN) and launcher path. Take effect immediately and trigger a save: on first Save, `AntiAFK.json` is created next to the exe with the current full configuration. A balloon tip on screen tells you if it was created |
 | Open log | Current session log — a window in memory, not a file on disk |
 | Exit | Close completely |
 
@@ -71,9 +71,9 @@ The match thresholds come from measurement rather than taste. The test: each of 
 
 ## Configuration
 
-Most people never need this. Language and launcher path are in tray → **Settings**, and those last until the app closes.
+Most people never need this. Language and launcher path are in tray → **Settings**. They take effect immediately, and pressing Save triggers this flow: if `AntiAFK.json` does not exist yet, the app creates it next to the exe with the current full configuration — all fields, with current values. A balloon tip tells you. After that, the file stays as is; pressing Save again does nothing so your hand-edits are never overwritten.
 
-Everything else lives in an optional file: put `AntiAFK.json` next to `AntiAFK.exe` and it's read on startup. There is none by default, the app never creates one, and it never writes to one — so a config stays exactly as you wrote it, comments included. Applying an update moves a new exe over the old one and leaves the rest of the folder alone, so the file survives auto-updates.
+Put `AntiAFK.json` next to `AntiAFK.exe` before the app starts, and it's read on startup. Anything in it that makes no sense is logged as a warning and falls back to a built-in value. The config is optional; leave it out and the app runs with defaults. Applying an update moves a new exe over the old one and leaves the rest of the folder alone, so `AntiAFK.json` survives auto-updates.
 
 [config.example.json](config.example.json) lists every field with its default. Copy the whole thing or write only the part you care about — every section is optional and anything left out keeps its built-in value. This is a complete, valid config:
 
@@ -95,7 +95,7 @@ Comments and trailing commas are accepted, even though strict JSON forbids both.
 
 Screen coordinates aren't configurable, and neither are the delays inside a single click. Those live in `InputService` for a reason: they're what keeps a click where it was aimed, and shortening them is how clicks start landing on the neighbouring button.
 
-Since the file is read and never written, a change in the settings window that contradicts it lasts until restart and no further. The log says so when it happens, naming the field.
+The file is read once on startup. Any change you make by hand takes effect the next time you restart the app. Changes in the settings window take effect immediately for the running app and trigger a save of the full config if one does not exist yet.
 
 Startup is where the log earns its keep: which file was read or that there wasn't one, then a line per problem — a key that doesn't exist, a spawn id this build can't recognise, a range with min above max. None of it stops the app starting. It falls back to the built-in value and says which and why.
 
@@ -160,5 +160,5 @@ The policy they require lives in [Code signing policy](../README.en.md#code-sign
 | Engine stopped on its own | After five crashes in a row it stops restarting instead of looping the same failure. The cause is in the log console; Start tries again |
 | Updates aren't coming | Latest release must be published (not draft, not pre-release) and contain `AntiAFK.exe`. Without an `AntiAFK.exe.sha256` next to it the update is discarded as unverifiable |
 | Workflow didn't run | Tag must start with `v` |
-| Settings disappeared after restart | The settings window keeps nothing between runs, by design. Put the values in `AntiAFK.json` next to the exe to make them stick |
+| Settings from the window didn't stick | If you changed language or launcher path but they were back to defaults after restart, the save probably didn't happen. Check that you pressed Save in the settings window — a balloon tip should have appeared. If the save failed, the log console will say why. Put the values in `AntiAFK.json` by hand if you need them to stick without the window |
 | Something in `AntiAFK.json` does nothing | The first lines of the log name every key that doesn't exist and every value that had to be corrected. A misspelled key reads as a key that isn't there, which is exactly what that warning is for |

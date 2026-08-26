@@ -25,7 +25,7 @@ The 100% display scaling and 16:9 borderless requirements in the README come fro
 Nothing further down works properly until these do.
 
 - [x] Read an optional `AntiAFK.json` next to the executable, in the shape `docs/config.example.json` documents. Every section can be left out, and a file that is malformed, misspelled or full of impossible values logs what is wrong and falls back to the built-in defaults rather than stopping the app from starting.
-- [ ] Persist what the settings window changes. The file above is read and never written, on purpose, so a hand-written config keeps its comments — but that leaves language and launcher path still resetting on restart. Only what is in the file survives an auto-update.
+- [x] Persist what the settings window changes. On first Save, writes AntiAFK.json with the current full configuration. After that, the file is never touched — a hand-written config keeps its comments and hand edits. Survives an auto-update because the update replaces only the exe.
 - [ ] Make a click verifiable: tell from the log whether it landed where it was aimed, instead of inferring it from what the game did next
 - [ ] Spot a frozen or crashed game and bring it back up
 - [ ] Notice when you've taken over manually and step aside until you're done

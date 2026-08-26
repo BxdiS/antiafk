@@ -6,4 +6,6 @@ public interface IConfigService
 {
     AppConfig Current { get; }
     void Save(AppConfig config);
+
+    event Action<string>? SettingsSaved;
 }

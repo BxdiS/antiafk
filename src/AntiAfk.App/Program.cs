@@ -28,8 +28,8 @@ internal static class Program
         }
 
         // Both of these are built before the single-instance check so the "already running" message
-        // comes out in the language the config file asks for, and so everything the config loader
-        // has to say about that file is already in the buffer the log console shows.
+        // comes out in the right language, and so everything the config loader has to say is
+        // already in the buffer the log console shows.
         var logger = new MemoryLogger();
         var config = ConfigFile.Load(logger);
 
