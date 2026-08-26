@@ -28,6 +28,10 @@ public sealed class AutoLoginService : IAutoLoginService
         public const int MeasuredWidth = GameConstants.BaseWidth;
         public const int MeasuredHeight = GameConstants.BaseHeight;
 
+        /// Project buttons in the launcher, clicked before login when the config names a project.
+        public static readonly (int X, int Y) ProjectMajestic = GameConstants.ProjectMajestic;
+        public static readonly (int X, int Y) ProjectRussiaOnline = GameConstants.ProjectRussiaOnline;
+
         /// Launcher login button. The launcher window spans roughly (410,170)-(1570,907).
         public static readonly (int X, int Y) LoginButton = (950, 487);
 
@@ -126,9 +130,13 @@ public sealed class AutoLoginService : IAutoLoginService
         // Re-read it after the wait: the launcher replaces its startup window with the real one
         // while it renders, so the handle found a moment ago can already be gone.
         launcher = _windowService.FindLauncherWindow() ?? launcher;
+        var launcherHandle = launcher?.Handle ?? IntPtr.Zero;
+
+        ClickProjectButton(launcherHandle);
+        await Task.Delay(2000, cancellationToken);
 
         _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
-        ClickOnWindow(launcher?.Handle ?? IntPtr.Zero, Coords.LoginButton.X, Coords.LoginButton.Y);
+        ClickOnWindow(launcherHandle, Coords.LoginButton.X, Coords.LoginButton.Y);
 
         // Give the launcher a moment to start the game process before the engine begins looking
         // for its window.
@@ -216,6 +224,22 @@ public sealed class AutoLoginService : IAutoLoginService
             _logger.Error("Auto-login failed", ex);
             return AutoLoginResult.Failed;
         }
+    }
+
+    private void ClickProjectButton(IntPtr launcherHandle)
+    {
+        var project = _configService.Current.Project;
+        if (string.IsNullOrEmpty(project))
+            project = GameConstants.DefaultProject;
+
+        var (x, y) = project.ToLowerInvariant() switch
+        {
+            "russia_online" => Coords.ProjectRussiaOnline,
+            _ => Coords.ProjectMajestic
+        };
+
+        _logger.Info($"Auto-login: selecting project \"{project}\" at ({x}, {y})");
+        ClickOnWindow(launcherHandle, x, y);
     }
 
     // The coordinates below are fixed 1080p values, so the single most useful thing a log can say
