@@ -47,6 +47,15 @@ public sealed class ProjectProfile
     // Launcher project button — clicked before the login button.
     public required (int X, int Y) ProjectButton { get; init; }
 
+    // Spawn bar layout. Majestic uses circular icons detected by SpawnBarDetector; Russia Online
+    // uses a rectangular strip with smaller icons at a tighter pitch — no glyph recognition yet,
+    // so the bot clicks the leftmost icon. Both bars are centred on the screen.
+    public bool UseSpawnBarDetector { get; init; } = true;
+    public int SpawnBarCenterX { get; init; } = GameConstants.BaseSpawnBarCenterX;
+    public int SpawnBarRowY { get; init; } = GameConstants.BaseSpawnBarRowY;
+    public int SpawnBarPitch { get; init; } = GameConstants.BaseSpawnIconPitch;
+    public int SpawnBarMaxIcons { get; init; } = GameConstants.MaxSpawnIcons;
+
     public static ProjectProfile Majestic { get; } = new()
     {
         Id = "majestic",
@@ -100,7 +109,12 @@ public sealed class ProjectProfile
         Character3ProbeColor = 0xc83d3d,
         Character2Probe = (955, 860),
         Character2ProbeColor = 0x8f8f8f,
-        ProjectButton = GameConstants.ProjectRussiaOnline
+        ProjectButton = GameConstants.ProjectRussiaOnline,
+        UseSpawnBarDetector = false,
+        SpawnBarCenterX = 960,
+        SpawnBarRowY = 967,
+        SpawnBarPitch = 47,
+        SpawnBarMaxIcons = 5
     };
 
     public static ProjectProfile ForProject(string project) =>

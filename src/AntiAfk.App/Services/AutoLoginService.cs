@@ -328,6 +328,14 @@ public sealed class AutoLoginService : IAutoLoginService
     /// </summary>
     private async Task SelectSpawnAsync(IntPtr gameHandle, CancellationToken cancellationToken)
     {
+        var profile = ActiveProfile;
+
+        if (!profile.UseSpawnBarDetector)
+        {
+            await SelectSpawnSimpleAsync(gameHandle, profile, cancellationToken);
+            return;
+        }
+
         var layout = ResolveSpawnBarLayout();
         var (reading, alreadyInWorld) = await WaitForSpawnBarAsync(gameHandle, layout, cancellationToken);
 
@@ -339,9 +347,6 @@ public sealed class AutoLoginService : IAutoLoginService
 
         if (reading is null)
         {
-            // Scaled rather than clicked where it was measured. The rest of the login coordinates
-            // are raw 1080p values, but this one has a window to scale against by the time it runs,
-            // and on a 1440p client the unscaled point lands on the map instead of the bar.
             var (fallbackX, fallbackY) = layout.ToScreen(Coords.DefaultSpawn.X, Coords.DefaultSpawn.Y);
             _logger.Warning(
                 $"Auto-login: could not read the spawn bar. Clicking the fixed fallback point " +
@@ -420,6 +425,33 @@ public sealed class AutoLoginService : IAutoLoginService
         }
 
         return (null, false);
+    }
+
+    /// <summary>
+    /// Simplified spawn selection for projects without glyph-based bar detection (Russia Online).
+    /// Waits for the HUD to confirm the spawn screen is up, then clicks the leftmost icon.
+    /// </summary>
+    private async Task SelectSpawnSimpleAsync(IntPtr gameHandle, ProjectProfile profile, CancellationToken cancellationToken)
+    {
+        _logger.Info(
+            $"Auto-login: spawn bar detection is not available for project \"{profile.Id}\". " +
+            $"Waiting briefly, then clicking the leftmost icon.");
+
+        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+
+        var hudColor = ((uint)profile.HudR << 16) | ((uint)profile.HudG << 8) | profile.HudB;
+        if (IsPixelColor(profile.HudPixel.X, profile.HudPixel.Y, hudColor, profile.HudTolerance))
+        {
+            _logger.Info("Auto-login: already in the world, no spawn screen to answer.");
+            return;
+        }
+
+        var x = profile.SpawnBarCenterX - profile.SpawnBarPitch;
+        var y = profile.SpawnBarRowY;
+
+        _logger.Info($"Auto-login: clicking leftmost spawn icon at ({x}, {y}).");
+        ClickOnWindow(gameHandle, x, y);
+        await Task.Delay(SpawnClickSettle, cancellationToken);
     }
 
     /// <summary>
