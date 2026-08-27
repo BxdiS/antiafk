@@ -1,5 +1,3 @@
-using AntiAfk.Core.Constants;
-
 namespace AntiAfk.Core.Vision;
 
 /// One icon found on the spawn bar. Slot is its position from the left, counting only icons that
@@ -82,7 +80,7 @@ public static class SpawnBarDetector
         {
             var rowY = layout.RowY + offset;
 
-            for (var count = MinIcons; count <= GameConstants.MaxSpawnIcons; count++)
+            for (var count = MinIcons; count <= layout.MaxIcons; count++)
             {
                 var reading = TryFit(strip, layout, rowY, count, scores);
                 if (reading is not null && (best is null || reading.Confidence > best.Confidence))
@@ -175,8 +173,8 @@ public static class SpawnBarDetector
 
     /// <summary>
     /// How much the position at (<paramref name="centerX"/>, <paramref name="rowY"/>) looks like a
-    /// spawn icon: a dark disc with a white glyph in it. Null when the position is not fully inside
-    /// the captured strip.
+    /// spawn icon: a dark background with a white glyph in it. Null when the position is not fully
+    /// inside the captured strip.
     /// </summary>
     private static SpawnSlotProbe? ProbeSlot(
         PixelGrid strip,
@@ -194,37 +192,66 @@ public static class SpawnBarDetector
         var localY = strip.ToLocalY(rowY);
         var reach = layout.Diameter / 2;
 
-        if (!strip.Contains(localX - reach, localY - reach) || !strip.Contains(localX + reach, localY + reach))
-        {
-            return null;
-        }
-
-        // The ring sits inside the disc but outside the glyph, so it reads the disc itself rather
-        // than whatever the glyph happens to cover.
-        var innerRadius = layout.Diameter * 0.36;
-        var outerRadius = layout.Diameter * 0.46;
-        var innerSquared = innerRadius * innerRadius;
-        var outerSquared = outerRadius * outerRadius;
-
         var ringTotal = 0;
         var ringDark = 0;
 
-        for (var dy = -reach; dy <= reach; dy++)
+        if (layout.CircularBackground)
         {
-            for (var dx = -reach; dx <= reach; dx++)
+            if (!strip.Contains(localX - reach, localY - reach) || !strip.Contains(localX + reach, localY + reach))
             {
-                var distanceSquared = dx * dx + dy * dy;
-                if (distanceSquared < innerSquared || distanceSquared > outerSquared)
+                return null;
+            }
+
+            var innerRadius = layout.Diameter * 0.36;
+            var outerRadius = layout.Diameter * 0.46;
+            var innerSquared = innerRadius * innerRadius;
+            var outerSquared = outerRadius * outerRadius;
+
+            for (var dy = -reach; dy <= reach; dy++)
+            {
+                for (var dx = -reach; dx <= reach; dx++)
                 {
-                    continue;
+                    var distanceSquared = dx * dx + dy * dy;
+                    if (distanceSquared < innerSquared || distanceSquared > outerSquared)
+                    {
+                        continue;
+                    }
+
+                    var (r, g, b) = strip[localX + dx, localY + dy];
+                    ringTotal++;
+
+                    if (PixelGrid.Luminance(r, g, b) <= DiscMaxLuminance)
+                    {
+                        ringDark++;
+                    }
                 }
+            }
+        }
+        else
+        {
+            var halfPitch = layout.Pitch / 2;
+            if (!strip.Contains(localX - halfPitch, localY - reach) || !strip.Contains(localX + halfPitch, localY + reach))
+            {
+                return null;
+            }
 
-                var (r, g, b) = strip[localX + dx, localY + dy];
-                ringTotal++;
-
-                if (PixelGrid.Luminance(r, g, b) <= DiscMaxLuminance)
+            var glyphHalf = layout.GlyphBox / 2;
+            for (var dy = -reach; dy <= reach; dy++)
+            {
+                for (var dx = -halfPitch; dx <= halfPitch; dx++)
                 {
-                    ringDark++;
+                    if (Math.Abs(dx) <= glyphHalf && Math.Abs(dy) <= glyphHalf)
+                    {
+                        continue;
+                    }
+
+                    var (r, g, b) = strip[localX + dx, localY + dy];
+                    ringTotal++;
+
+                    if (PixelGrid.Luminance(r, g, b) <= DiscMaxLuminance)
+                    {
+                        ringDark++;
+                    }
                 }
             }
         }

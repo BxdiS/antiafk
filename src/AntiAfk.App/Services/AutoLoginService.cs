@@ -28,6 +28,10 @@ public sealed class AutoLoginService : IAutoLoginService
         public const int MeasuredWidth = GameConstants.BaseWidth;
         public const int MeasuredHeight = GameConstants.BaseHeight;
 
+        /// Project buttons in the launcher, clicked before login when the config names a project.
+        public static readonly (int X, int Y) ProjectMajestic = GameConstants.ProjectMajestic;
+        public static readonly (int X, int Y) ProjectRussiaOnline = GameConstants.ProjectRussiaOnline;
+
         /// Launcher login button. The launcher window spans roughly (410,170)-(1570,907).
         public static readonly (int X, int Y) LoginButton = (950, 487);
 
@@ -95,6 +99,9 @@ public sealed class AutoLoginService : IAutoLoginService
     private readonly IWindowService _windowService;
     private readonly IConfigService _configService;
 
+    private ProjectProfile ActiveProfile =>
+        ProjectProfile.ForProject(_configService.Current.Project);
+
     public AutoLoginService(
         IAppLogger logger,
         IScreenCaptureService screenCapture,
@@ -126,9 +133,13 @@ public sealed class AutoLoginService : IAutoLoginService
         // Re-read it after the wait: the launcher replaces its startup window with the real one
         // while it renders, so the handle found a moment ago can already be gone.
         launcher = _windowService.FindLauncherWindow() ?? launcher;
+        var launcherHandle = launcher?.Handle ?? IntPtr.Zero;
+
+        ClickProjectButton(launcherHandle);
+        await Task.Delay(2000, cancellationToken);
 
         _logger.Info($"Auto-login: clicking launcher login button at ({Coords.LoginButton.X}, {Coords.LoginButton.Y})");
-        ClickOnWindow(launcher?.Handle ?? IntPtr.Zero, Coords.LoginButton.X, Coords.LoginButton.Y);
+        ClickOnWindow(launcherHandle, Coords.LoginButton.X, Coords.LoginButton.Y);
 
         // Give the launcher a moment to start the game process before the engine begins looking
         // for its window.
@@ -218,6 +229,14 @@ public sealed class AutoLoginService : IAutoLoginService
         }
     }
 
+    private void ClickProjectButton(IntPtr launcherHandle)
+    {
+        var profile = ActiveProfile;
+        var (x, y) = profile.ProjectButton;
+        _logger.Info($"Auto-login: selecting project \"{profile.Id}\" at ({x}, {y})");
+        ClickOnWindow(launcherHandle, x, y);
+    }
+
     // The coordinates below are fixed 1080p values, so the single most useful thing a log can say
     // when clicks "go nowhere" is what the screen actually is.
     private void LogScreenGeometry()
@@ -259,26 +278,44 @@ public sealed class AutoLoginService : IAutoLoginService
 
     private async Task SelectCharacterAsync(IntPtr gameHandle, int characterSlot, CancellationToken cancellationToken)
     {
-        // Character 3 is only available if purchased; fall back to slot 1 if not.
-        var char3Available = IsPixelColor(
-            Coords.Character3Probe.X, Coords.Character3Probe.Y, Coords.Character3Color, Coords.Character3Tolerance);
-
+        var profile = ActiveProfile;
         int character = characterSlot;
-        if (characterSlot == 3 && !char3Available)
+
+        // Character 3 is only available if purchased; the probe pixel lights up when the slot is locked.
+        if (character == 3)
         {
-            _logger.Info("Character 3 not available, selecting character 1");
-            character = 1;
+            var char3Locked = IsPixelColor(
+                profile.Character3Probe.X, profile.Character3Probe.Y,
+                profile.Character3ProbeColor, profile.Character3ProbeTolerance);
+            if (char3Locked)
+            {
+                _logger.Info("Character 3 is locked, falling back to character 1.");
+                character = 1;
+            }
         }
 
-        var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character);
+        // On Russia Online, character 2 might not be created yet.
+        if (character == 2 && profile.Character2Probe is { } c2Probe)
+        {
+            var char2NotCreated = IsPixelColor(
+                c2Probe.X, c2Probe.Y,
+                profile.Character2ProbeColor, profile.Character2ProbeTolerance);
+            if (char2NotCreated)
+            {
+                _logger.Info("Character 2 is not created, falling back to character 1.");
+                character = 1;
+            }
+        }
+
+        var (selectX, selectY, confirmX, confirmY) = GetCharacterCoordinates(character, profile);
 
         _logger.Info($"Selecting character {character}: click ({selectX},{selectY})");
         ClickOnWindow(gameHandle, selectX, selectY);
-        await Task.Delay(4000, cancellationToken); // Wait for UI to respond to selection (4s for stability)
+        await Task.Delay(4000, cancellationToken);
 
         _logger.Info($"Confirming character {character}: click ({confirmX},{confirmY})");
         ClickOnWindow(gameHandle, confirmX, confirmY);
-        await Task.Delay(5000, cancellationToken); // Wait for character load and transition (5s for slow internet/low FPS)
+        await Task.Delay(5000, cancellationToken);
     }
 
     /// <summary>
@@ -291,6 +328,7 @@ public sealed class AutoLoginService : IAutoLoginService
     /// </summary>
     private async Task SelectSpawnAsync(IntPtr gameHandle, CancellationToken cancellationToken)
     {
+        var profile = ActiveProfile;
         var layout = ResolveSpawnBarLayout();
         var (reading, alreadyInWorld) = await WaitForSpawnBarAsync(gameHandle, layout, cancellationToken);
 
@@ -302,10 +340,8 @@ public sealed class AutoLoginService : IAutoLoginService
 
         if (reading is null)
         {
-            // Scaled rather than clicked where it was measured. The rest of the login coordinates
-            // are raw 1080p values, but this one has a window to scale against by the time it runs,
-            // and on a 1440p client the unscaled point lands on the map instead of the bar.
-            var (fallbackX, fallbackY) = layout.ToScreen(Coords.DefaultSpawn.X, Coords.DefaultSpawn.Y);
+            var fallback = profile.DefaultSpawn;
+            var (fallbackX, fallbackY) = layout.ToScreen(fallback.X, fallback.Y);
             _logger.Warning(
                 $"Auto-login: could not read the spawn bar. Clicking the fixed fallback point " +
                 $"({fallbackX}, {fallbackY}) - whichever spawn point that is for this player.");
@@ -371,7 +407,9 @@ public sealed class AutoLoginService : IAutoLoginService
             // Checked after the bar, not before: the spawn screen does not light the HUD pixel,
             // but the order still matters if that ever changes - a bar on screen is the stronger
             // evidence of the two, because it is the whole bar rather than one pixel.
-            if (IsPixelColor(Coords.HudPixel.X, Coords.HudPixel.Y, Coords.HudColor, Coords.HudTolerance))
+            var profile = ActiveProfile;
+            var hudColor = ((uint)profile.HudR << 16) | ((uint)profile.HudG << 8) | profile.HudB;
+            if (IsPixelColor(profile.HudPixel.X, profile.HudPixel.Y, hudColor, profile.HudTolerance))
             {
                 return (null, true);
             }
@@ -390,14 +428,19 @@ public sealed class AutoLoginService : IAutoLoginService
     /// </summary>
     private SpawnBarLayout ResolveSpawnBarLayout()
     {
+        var profile = ActiveProfile;
         var game = _windowService.FindGameWindow();
+
         if (game is null)
         {
             _logger.Warning("Auto-login: no game window to measure the spawn bar against. Using 1080p defaults.");
-            return SpawnBarLayout.Base;
         }
 
-        return SpawnBarLayout.ForWindow(game.Left, game.Top, game.Width, game.Height);
+        return SpawnBarLayout.ForWindow(
+            profile.SpawnBarCenterX, profile.SpawnBarRowY, profile.SpawnBarPitch,
+            profile.SpawnBarDiameter, profile.SpawnBarGlyphBox,
+            profile.SpawnBarMaxIcons, profile.SpawnBarCircularBackground,
+            game?.Left ?? 0, game?.Top ?? 0, game?.Width ?? 0, game?.Height ?? 0);
     }
 
     private PixelGrid? TryCaptureSpawnStrip(SpawnBarLayout layout)
@@ -469,16 +512,17 @@ public sealed class AutoLoginService : IAutoLoginService
     /// </summary>
     private async Task<bool> WaitForGameLoadAsync(CancellationToken cancellationToken)
     {
-        // Wait for the in-game HUD to appear
+        var profile = ActiveProfile;
+        var hudColor = ((uint)profile.HudR << 16) | ((uint)profile.HudG << 8) | profile.HudB;
         var loaded = false;
         var attempts = 0;
-        const int maxAttempts = 300; // up to 5 minutes
+        const int maxAttempts = 300;
 
-        _logger.Info($"Auto-login: waiting for in-game HUD (pixel {Coords.HudPixel.X},{Coords.HudPixel.Y})...");
+        _logger.Info($"Auto-login: waiting for in-game HUD (pixel {profile.HudPixel.X},{profile.HudPixel.Y})...");
 
         while (!loaded && attempts < maxAttempts)
         {
-            if (IsPixelColor(Coords.HudPixel.X, Coords.HudPixel.Y, Coords.HudColor, Coords.HudTolerance))
+            if (IsPixelColor(profile.HudPixel.X, profile.HudPixel.Y, hudColor, profile.HudTolerance))
             {
                 loaded = true;
                 break;
@@ -499,13 +543,13 @@ public sealed class AutoLoginService : IAutoLoginService
         return true;
     }
 
-    private (int selectX, int selectY, int confirmX, int confirmY) GetCharacterCoordinates(int character)
+    private static (int selectX, int selectY, int confirmX, int confirmY) GetCharacterCoordinates(int character, ProjectProfile profile)
     {
         return character switch
         {
-            2 => (Coords.Character2.X, Coords.Character2.Y, Coords.Character2Confirm.X, Coords.Character2Confirm.Y),
-            3 => (Coords.Character3.X, Coords.Character3.Y, Coords.Character3Confirm.X, Coords.Character3Confirm.Y),
-            _ => (Coords.Character1.X, Coords.Character1.Y, Coords.Character1Confirm.X, Coords.Character1Confirm.Y)
+            2 => (profile.Character2.X, profile.Character2.Y, profile.Character2Confirm.X, profile.Character2Confirm.Y),
+            3 => (profile.Character3.X, profile.Character3.Y, profile.Character3Confirm.X, profile.Character3Confirm.Y),
+            _ => (profile.Character1.X, profile.Character1.Y, profile.Character1Confirm.X, profile.Character1Confirm.Y)
         };
     }
 

@@ -63,6 +63,15 @@ public static class GameConstants
     /// screen has to be captured to be sure the whole bar is in it.
     public const int MaxSpawnIcons = 12;
 
+    // Project picker in the launcher, shown before the server list. Each project is a separate
+    // game server sharing the same launcher. The X coordinate is the same for both; only Y differs.
+    public const int BaseProjectButtonX = 460;
+    public static readonly (int X, int Y) ProjectMajestic = (BaseProjectButtonX, 302);
+    public static readonly (int X, int Y) ProjectRussiaOnline = (BaseProjectButtonX, 338);
+
+    public static readonly string[] KnownProjects = ["majestic", "russia_online"];
+    public const string DefaultProject = "majestic";
+
     public const string GameProcessName = "GTA5";
 
     // The launcher ships as "Majestic Launcher.exe", so the process name is the file name without

@@ -63,6 +63,7 @@ public sealed class StateDetector : IStateDetector
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
+        var p = _runtime.Profile;
 
         byte r, g, b;
         try
@@ -75,7 +76,9 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
-        if (r > 200 && g < 40 && b is >= 80 and <= 140)
+        if (Math.Abs(r - p.MapMenuR) <= p.MapMenuTolerance
+            && Math.Abs(g - p.MapMenuG) <= p.MapMenuTolerance
+            && Math.Abs(b - p.MapMenuB) <= p.MapMenuTolerance)
         {
             _logger.Warning("Map menu detected. Closing with ESC...");
             _inputService.SendKeyToGame(gameHandle, NativeKeys.Escape, 0.1);
@@ -94,12 +97,13 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
+        var p = _runtime.Profile;
         try
         {
             var (r, g, b) = _screenCapture.GetPixelColor(coords.PreStartPixelX, coords.PreStartPixelY);
-            return Math.Abs(r - GameConstants.PreStartR) <= GameConstants.PreStartTolerance
-                && Math.Abs(g - GameConstants.PreStartG) <= GameConstants.PreStartTolerance
-                && Math.Abs(b - GameConstants.PreStartB) <= GameConstants.PreStartTolerance;
+            return Math.Abs(r - p.PreStartR) <= p.PreStartTolerance
+                && Math.Abs(g - p.PreStartG) <= p.PreStartTolerance
+                && Math.Abs(b - p.PreStartB) <= p.PreStartTolerance;
         }
         catch (Exception ex)
         {
@@ -116,12 +120,13 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
+        var p = _runtime.Profile;
         try
         {
             var (r, g, b) = _screenCapture.GetPixelColor(coords.CharSelectPixelX, coords.CharSelectPixelY);
-            return Math.Abs(r - GameConstants.CharSelectR) <= GameConstants.CharSelectTolerance
-                && Math.Abs(g - GameConstants.CharSelectG) <= GameConstants.CharSelectTolerance
-                && Math.Abs(b - GameConstants.CharSelectB) <= GameConstants.CharSelectTolerance;
+            return Math.Abs(r - p.CharSelectR) <= p.CharSelectTolerance
+                && Math.Abs(g - p.CharSelectG) <= p.CharSelectTolerance
+                && Math.Abs(b - p.CharSelectB) <= p.CharSelectTolerance;
         }
         catch (Exception ex)
         {
@@ -138,13 +143,13 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
+        var p = _runtime.Profile;
         try
         {
             var (r, g, b) = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
-
-            // Same test as the HUD branch of SmartStateRecovery. Character select shares this
-            // accent colour, so callers must rule that out first - IsAtCharacterSelect does it.
-            return r >= 200 && g <= 60 && b is >= 80 and <= 170;
+            return Math.Abs(r - p.HudR) <= p.HudTolerance
+                && Math.Abs(g - p.HudG) <= p.HudTolerance
+                && Math.Abs(b - p.HudB) <= p.HudTolerance;
         }
         catch (Exception ex)
         {
@@ -200,7 +205,7 @@ public sealed class StateDetector : IStateDetector
             return;
         }
 
-        if (rHud >= 200 && gHud <= 60 && bHud is >= 80 and <= 170)
+        if (IsInGame())
         {
             _logger.Info("Status: In game. Opening tablet and marketplace...");
             OpenMarketplace(gameHandle, coords, timings);

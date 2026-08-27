@@ -20,12 +20,22 @@ Clicks landing on the wrong button is the recurring one. The fixed delays in `In
 
 The 100% display scaling and 16:9 borderless requirements in the README come from the same place. Coordinates are physical pixels, and the app is honest about what it can't handle yet.
 
-## v1.2.0 — Foundations
+## v1.2.0 — Russia Online
 
-Nothing further down works properly until these do.
+Majestic RP runs a child server, Russia Online — the same mod with slightly different UI flow. Before choosing a server, the launcher now shows a project picker: Majestic or Russia Online. Once the project is chosen, the rest of the login is identical.
 
 - [x] Read an optional `AntiAFK.json` next to the executable, in the shape `docs/config.example.json` documents. Every section can be left out, and a file that is malformed, misspelled or full of impossible values logs what is wrong and falls back to the built-in defaults rather than stopping the app from starting.
 - [x] Persist what the settings window changes. On first Save, writes AntiAFK.json with the current full configuration. After that, the file is never touched — a hand-written config keeps its comments and hand edits. Survives an auto-update because the update replaces only the exe.
+- [ ] Project picker on Start: prompt the user for Majestic or Russia Online before beginning the cycle. A balloon tip confirms the choice and points to Settings for persistence.
+- [ ] Default project in config and Settings window, so the picker is skipped on subsequent starts.
+- [ ] Click the project button at the correct coordinate before proceeding to the server list.
+
+Restarting after a crash rather than dying quietly in the tray was on this list and shipped in v1.1.x: five attempts with exponential backoff, then it stops and says why.
+
+## v1.3.0 — Foundations
+
+Nothing further down works properly until these do.
+
 - [ ] Make a click verifiable: tell from the log whether it landed where it was aimed, instead of inferring it from what the game did next
 - [ ] Spot a frozen or crashed game and bring it back up
 - [ ] Notice when you've taken over manually and step aside until you're done
@@ -34,9 +44,7 @@ Nothing further down works properly until these do.
 - [ ] Trim memory use — it's heavier than it needs to be for what it does
 - [ ] Harden the update path. Moving a downloaded exe over the running one is the only thing here that can break every install at once, and nothing checks it beyond the release workflow refusing to publish more than one file.
 
-Restarting after a crash rather than dying quietly in the tray was on this list and shipped in v1.1.x: five attempts with exponential backoff, then it stops and says why.
-
-## v1.3.0 — Behaviour
+## v1.4.0 — Behaviour
 
 Right now the bot clicks the same thing at the same pace forever. That's fine until someone looks at it.
 
@@ -46,7 +54,7 @@ This waits for Foundations on purpose. The delays in the click path are load-bea
 - [ ] Pick categories at random rather than hammering one
 - [ ] Uneven pauses, so the rhythm doesn't read as a script
 
-## v1.4.0 — Telling you things
+## v1.5.0 — Telling you things
 
 There is no Telegram bot today. Nothing in the app touches the network except the update check, and the only notification is a balloon tip from the tray icon. So this is a build rather than an extension: an outbound channel, a bot token that needs somewhere to live (which is why it waits on the config file in v1.2.0), and start/stop from chat means accepting remote control of a process on someone's machine.
 
@@ -57,7 +65,7 @@ There is no Telegram bot today. Nothing in the app touches the network except th
 
 The "buy me a coffee" link that used to sit in this section depends on none of it and goes out with whatever patch comes next.
 
-## v1.5.0 — Fitting more setups
+## v1.6.0 — Fitting more setups
 
 - [ ] Resolutions beyond 16:9 — 4:3, 21:9, ultrawide
 - [ ] Follow the Windows light/dark setting
@@ -70,7 +78,7 @@ Resolutions is the large one, and it is really the first half of v2.0.0. `Coordi
 
 The big one. Everything server-specific — coordinates, window titles, the marketplace flow — gets pulled out of the core and into per-server profiles, so a third server later is a config file rather than a rewrite. Comes with a server picker in settings; Majestic RP stays the default.
 
-Builds straight on the coordinates-as-data work from v1.5.0 and the settings file from v1.2.0. A profile has to be something you can ship, edit and select, which means both of those have to exist first.
+Builds straight on the coordinates-as-data work from v1.6.0 and the settings file from v1.2.0. A profile has to be something you can ship, edit and select, which means both of those have to exist first.
 
 ## v3.0.0 — Opening it up
 

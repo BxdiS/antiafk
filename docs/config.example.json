@@ -1,5 +1,6 @@
 {
   "language": "ru",
+  "project": "majestic",
   "launcherPath": "",
   "timings": {
     "backgroundClickDelay": { "min": 25, "max": 30 },

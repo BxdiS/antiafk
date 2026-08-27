@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Models;
 using AntiAfk.Core.Vision;
 using AntiAfk.Infrastructure.Localization;
@@ -176,6 +177,7 @@ public static class ConfigFile
     private static void Validate(AppConfig config, IAppLogger logger)
     {
         ReplaceNulls(config, logger);
+        ValidateProject(config, logger);
         ValidateLanguage(config, logger);
         ValidateSpawnPriority(config.Spawn, logger);
         ValidateTimings(config.Timings, logger);
@@ -199,6 +201,8 @@ public static class ConfigFile
         config.Update = OrDefault(config.Update, new UpdateSettings(), "update", logger);
         config.Spawn.Priority = OrDefault(config.Spawn.Priority, new SpawnSettings().Priority, "spawn.priority", logger);
 
+        config.Project ??= string.Empty;
+
         // Silent: an empty launcher path is a documented value meaning "find it yourself", so null
         // and "" ask for the same thing and there is nothing to report.
         config.LauncherPath ??= string.Empty;
@@ -213,6 +217,20 @@ public static class ConfigFile
 
         logger.Warning($"Config: {field} is null. Using the built-in value.");
         return fallback;
+    }
+
+    private static void ValidateProject(AppConfig config, IAppLogger logger)
+    {
+        if (string.IsNullOrEmpty(config.Project))
+            return;
+
+        if (!GameConstants.KnownProjects.Contains(config.Project, StringComparer.OrdinalIgnoreCase))
+        {
+            logger.Warning(
+                $"Config: project \"{config.Project}\" is not one this build knows " +
+                $"({string.Join(", ", GameConstants.KnownProjects)}). Clearing it — the picker will ask on start.");
+            config.Project = string.Empty;
+        }
     }
 
     private static void ValidateLanguage(AppConfig config, IAppLogger logger)
