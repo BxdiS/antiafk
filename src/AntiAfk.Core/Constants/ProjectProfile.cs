@@ -44,6 +44,15 @@ public sealed class ProjectProfile
     public uint Character2ProbeColor { get; init; }
     public int Character2ProbeTolerance { get; init; } = 30;
 
+    // ESC/pause menu detection pixel and expected colour. The game's pause menu has a coloured
+    // accent at a known position — checking it catches accidental ESC presses that leave the menu
+    // sitting open. Majestic shows pink, Russia Online shows white.
+    public required (int X, int Y) MapMenuPixel { get; init; }
+    public required byte MapMenuR { get; init; }
+    public required byte MapMenuG { get; init; }
+    public required byte MapMenuB { get; init; }
+    public int MapMenuTolerance { get; init; } = 30;
+
     // Launcher project button — clicked before the login button.
     public required (int X, int Y) ProjectButton { get; init; }
 
@@ -88,6 +97,10 @@ public sealed class ProjectProfile
         Character3Confirm = (1323, 993),
         Character3Probe = (1226, 1000),
         Character3ProbeColor = 0xe81c5a,
+        MapMenuPixel = GameConstants.BaseMapPixel,
+        MapMenuR = 0xE0,
+        MapMenuG = 0x14,
+        MapMenuB = 0x6E,
         ProjectButton = GameConstants.ProjectMajestic
     };
 
@@ -116,6 +129,11 @@ public sealed class ProjectProfile
         Character3ProbeColor = 0xc83d3d,
         Character2Probe = (955, 860),
         Character2ProbeColor = 0x8f8f8f,
+        MapMenuPixel = (403, 220),
+        MapMenuR = 0xFF,
+        MapMenuG = 0xFF,
+        MapMenuB = 0xFF,
+        MapMenuTolerance = 40,
         ProjectButton = GameConstants.ProjectRussiaOnline,
         MarketplaceIcon = (1026, 174),
         SpawnBarCenterX = 960,

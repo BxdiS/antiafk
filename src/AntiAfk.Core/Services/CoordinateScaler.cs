@@ -26,7 +26,7 @@ public static class CoordinateScaler
 
         var warnBox = ScaleBoxToScreen(GameConstants.BaseWarnBox, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var warnClick = ScaleToScreen(GameConstants.BaseWarnClick.X, GameConstants.BaseWarnClick.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
-        var mapPixel = ScaleToScreen(GameConstants.BaseMapPixel.X, GameConstants.BaseMapPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
+        var mapPixel = ScaleToScreen(profile.MapMenuPixel.X, profile.MapMenuPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var hudPixel = ScaleToScreen(profile.HudPixel.X, profile.HudPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var mpPixel = ScaleToScreen(GameConstants.BaseMpPixel.X, GameConstants.BaseMpPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var preStartPixel = ScaleToScreen(profile.PreStartPixel.X, profile.PreStartPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);

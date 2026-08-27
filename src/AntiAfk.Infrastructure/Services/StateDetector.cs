@@ -63,6 +63,7 @@ public sealed class StateDetector : IStateDetector
     {
         var coords = _runtime.Coordinates ?? throw new InvalidOperationException("Coordinates are not initialized.");
         var gameHandle = RequireGameHandle();
+        var p = _runtime.Profile;
 
         byte r, g, b;
         try
@@ -75,7 +76,9 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
-        if (r > 200 && g < 40 && b is >= 80 and <= 140)
+        if (Math.Abs(r - p.MapMenuR) <= p.MapMenuTolerance
+            && Math.Abs(g - p.MapMenuG) <= p.MapMenuTolerance
+            && Math.Abs(b - p.MapMenuB) <= p.MapMenuTolerance)
         {
             _logger.Warning("Map menu detected. Closing with ESC...");
             _inputService.SendKeyToGame(gameHandle, NativeKeys.Escape, 0.1);
