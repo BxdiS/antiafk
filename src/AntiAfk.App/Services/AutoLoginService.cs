@@ -329,13 +329,6 @@ public sealed class AutoLoginService : IAutoLoginService
     private async Task SelectSpawnAsync(IntPtr gameHandle, CancellationToken cancellationToken)
     {
         var profile = ActiveProfile;
-
-        if (!profile.UseSpawnBarDetector)
-        {
-            await SelectSpawnSimpleAsync(gameHandle, profile, cancellationToken);
-            return;
-        }
-
         var layout = ResolveSpawnBarLayout();
         var (reading, alreadyInWorld) = await WaitForSpawnBarAsync(gameHandle, layout, cancellationToken);
 
@@ -347,7 +340,8 @@ public sealed class AutoLoginService : IAutoLoginService
 
         if (reading is null)
         {
-            var (fallbackX, fallbackY) = layout.ToScreen(Coords.DefaultSpawn.X, Coords.DefaultSpawn.Y);
+            var fallback = profile.DefaultSpawn;
+            var (fallbackX, fallbackY) = layout.ToScreen(fallback.X, fallback.Y);
             _logger.Warning(
                 $"Auto-login: could not read the spawn bar. Clicking the fixed fallback point " +
                 $"({fallbackX}, {fallbackY}) - whichever spawn point that is for this player.");
@@ -428,47 +422,25 @@ public sealed class AutoLoginService : IAutoLoginService
     }
 
     /// <summary>
-    /// Simplified spawn selection for projects without glyph-based bar detection (Russia Online).
-    /// Waits for the HUD to confirm the spawn screen is up, then clicks the leftmost icon.
-    /// </summary>
-    private async Task SelectSpawnSimpleAsync(IntPtr gameHandle, ProjectProfile profile, CancellationToken cancellationToken)
-    {
-        _logger.Info(
-            $"Auto-login: spawn bar detection is not available for project \"{profile.Id}\". " +
-            $"Waiting briefly, then clicking the leftmost icon.");
-
-        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-
-        var hudColor = ((uint)profile.HudR << 16) | ((uint)profile.HudG << 8) | profile.HudB;
-        if (IsPixelColor(profile.HudPixel.X, profile.HudPixel.Y, hudColor, profile.HudTolerance))
-        {
-            _logger.Info("Auto-login: already in the world, no spawn screen to answer.");
-            return;
-        }
-
-        var x = profile.SpawnBarCenterX - profile.SpawnBarPitch;
-        var y = profile.SpawnBarRowY;
-
-        _logger.Info($"Auto-login: clicking leftmost spawn icon at ({x}, {y}).");
-        ClickOnWindow(gameHandle, x, y);
-        await Task.Delay(SpawnClickSettle, cancellationToken);
-    }
-
-    /// <summary>
     /// Where to look for the bar. Scaled to the game window when there is one - unlike the fixed
     /// login coordinates this is a search region, so being approximately right is enough and the
     /// click that follows goes to a detected icon rather than a guessed position.
     /// </summary>
     private SpawnBarLayout ResolveSpawnBarLayout()
     {
+        var profile = ActiveProfile;
         var game = _windowService.FindGameWindow();
+
         if (game is null)
         {
             _logger.Warning("Auto-login: no game window to measure the spawn bar against. Using 1080p defaults.");
-            return SpawnBarLayout.Base;
         }
 
-        return SpawnBarLayout.ForWindow(game.Left, game.Top, game.Width, game.Height);
+        return SpawnBarLayout.ForWindow(
+            profile.SpawnBarCenterX, profile.SpawnBarRowY, profile.SpawnBarPitch,
+            profile.SpawnBarDiameter, profile.SpawnBarGlyphBox,
+            profile.SpawnBarMaxIcons, profile.SpawnBarCircularBackground,
+            game?.Left ?? 0, game?.Top ?? 0, game?.Width ?? 0, game?.Height ?? 0);
     }
 
     private PixelGrid? TryCaptureSpawnStrip(SpawnBarLayout layout)

@@ -47,14 +47,21 @@ public sealed class ProjectProfile
     // Launcher project button — clicked before the login button.
     public required (int X, int Y) ProjectButton { get; init; }
 
-    // Spawn bar layout. Majestic uses circular icons detected by SpawnBarDetector; Russia Online
-    // uses a rectangular strip with smaller icons at a tighter pitch — no glyph recognition yet,
-    // so the bot clicks the leftmost icon. Both bars are centred on the screen.
-    public bool UseSpawnBarDetector { get; init; } = true;
+    // Marketplace icon inside the tablet, clicked after the tablet is opened.
+    public (int X, int Y) MarketplaceIcon { get; init; } = (GameConstants.BaseIconX, GameConstants.BaseIconY);
+
+    // Spawn bar layout. Majestic uses circular dark discs; Russia Online uses a rectangular dark
+    // strip. Both hold white SVG glyphs and are centred on the screen.
     public int SpawnBarCenterX { get; init; } = GameConstants.BaseSpawnBarCenterX;
     public int SpawnBarRowY { get; init; } = GameConstants.BaseSpawnBarRowY;
     public int SpawnBarPitch { get; init; } = GameConstants.BaseSpawnIconPitch;
+    public int SpawnBarDiameter { get; init; } = GameConstants.BaseSpawnIconDiameter;
+    public int SpawnBarGlyphBox { get; init; } = GameConstants.BaseSpawnGlyphBox;
     public int SpawnBarMaxIcons { get; init; } = GameConstants.MaxSpawnIcons;
+    public bool SpawnBarCircularBackground { get; init; } = true;
+
+    // Fallback spawn click when the detector cannot read the bar at all.
+    public (int X, int Y) DefaultSpawn { get; init; } = (1053, 964);
 
     public static ProjectProfile Majestic { get; } = new()
     {
@@ -110,11 +117,15 @@ public sealed class ProjectProfile
         Character2Probe = (955, 860),
         Character2ProbeColor = 0x8f8f8f,
         ProjectButton = GameConstants.ProjectRussiaOnline,
-        UseSpawnBarDetector = false,
+        MarketplaceIcon = (1026, 174),
         SpawnBarCenterX = 960,
         SpawnBarRowY = 967,
         SpawnBarPitch = 47,
-        SpawnBarMaxIcons = 5
+        SpawnBarDiameter = 44,
+        SpawnBarGlyphBox = 22,
+        SpawnBarMaxIcons = 5,
+        SpawnBarCircularBackground = false,
+        DefaultSpawn = (913, 967)
     };
 
     public static ProjectProfile ForProject(string project) =>

@@ -31,6 +31,12 @@ public sealed record SpawnBarLayout
     /// Side of the square around an icon centre the glyph fits in.
     public required int GlyphBox { get; init; }
 
+    /// Most icons the bar can hold for this project.
+    public required int MaxIcons { get; init; }
+
+    /// True for circular dark discs (Majestic), false for a rectangular dark strip (Russia Online).
+    public required bool CircularBackground { get; init; }
+
     /// Top-left of the game window on screen, and how its size compares with the resolution
     /// everything was measured at. Kept so a coordinate measured at 1080p can still be turned into
     /// a screen position on this window - see <see cref="ToScreen"/>.
@@ -47,15 +53,15 @@ public sealed record SpawnBarLayout
     /// being a few pixels off, which the detector searches for rather than assuming.
     public int RowSearchMargin => Math.Max(8, Diameter / 8);
 
-    public int StripLeft => CenterX - (GameConstants.MaxSpawnIcons * Pitch) / 2 - Pitch / 2;
+    public int StripLeft => CenterX - (MaxIcons * Pitch) / 2 - Pitch / 2;
 
     public int StripTop => RowY - Diameter / 2 - RowSearchMargin;
 
-    public int StripWidth => GameConstants.MaxSpawnIcons * Pitch + Pitch;
+    public int StripWidth => MaxIcons * Pitch + Pitch;
 
     public int StripHeight => Diameter + RowSearchMargin * 2;
 
-    /// The bar as measured: 1920x1080, fullscreen, top-left of the game window at (0,0).
+    /// The Majestic bar as measured: 1920x1080, fullscreen, top-left of the game window at (0,0).
     public static SpawnBarLayout Base { get; } = new()
     {
         CenterX = GameConstants.BaseSpawnBarCenterX,
@@ -63,6 +69,8 @@ public sealed record SpawnBarLayout
         Pitch = GameConstants.BaseSpawnIconPitch,
         Diameter = GameConstants.BaseSpawnIconDiameter,
         GlyphBox = GameConstants.BaseSpawnGlyphBox,
+        MaxIcons = GameConstants.MaxSpawnIcons,
+        CircularBackground = true,
         WindowLeft = 0,
         WindowTop = 0,
         ScaleX = 1,
@@ -70,30 +78,55 @@ public sealed record SpawnBarLayout
     };
 
     /// <summary>
-    /// The same bar on a game window of a given size and position. Scales the way CoordinateScaler
-    /// does - proportionally on each axis, then offset by the window's top-left corner.
+    /// The Majestic bar on a game window of a given size and position. Scales the way
+    /// CoordinateScaler does — proportionally on each axis, then offset by the window's top-left.
     /// </summary>
-    public static SpawnBarLayout ForWindow(int windowLeft, int windowTop, int windowWidth, int windowHeight)
+    public static SpawnBarLayout ForWindow(int windowLeft, int windowTop, int windowWidth, int windowHeight) =>
+        ForWindow(
+            GameConstants.BaseSpawnBarCenterX, GameConstants.BaseSpawnBarRowY,
+            GameConstants.BaseSpawnIconPitch, GameConstants.BaseSpawnIconDiameter, GameConstants.BaseSpawnGlyphBox,
+            GameConstants.MaxSpawnIcons, true,
+            windowLeft, windowTop, windowWidth, windowHeight);
+
+    /// <summary>
+    /// A bar with project-specific base values, scaled to a game window.
+    /// </summary>
+    public static SpawnBarLayout ForWindow(
+        int baseCenterX, int baseRowY, int basePitch, int baseDiameter, int baseGlyphBox,
+        int maxIcons, bool circularBackground,
+        int windowLeft, int windowTop, int windowWidth, int windowHeight)
     {
         if (windowWidth <= 0 || windowHeight <= 0)
         {
-            return Base;
+            return new SpawnBarLayout
+            {
+                CenterX = baseCenterX,
+                RowY = baseRowY,
+                Pitch = basePitch,
+                Diameter = baseDiameter,
+                GlyphBox = baseGlyphBox,
+                MaxIcons = maxIcons,
+                CircularBackground = circularBackground,
+                WindowLeft = 0,
+                WindowTop = 0,
+                ScaleX = 1,
+                ScaleY = 1
+            };
         }
 
         var scaleX = windowWidth / (double)GameConstants.BaseWidth;
         var scaleY = windowHeight / (double)GameConstants.BaseHeight;
-
-        // The icons are round, so their size scales with the smaller of the two axes - a window
-        // that is not 16:9 letterboxes the game rather than stretching the UI into ellipses.
         var iconScale = Math.Min(scaleX, scaleY);
 
         return new SpawnBarLayout
         {
-            CenterX = windowLeft + (int)Math.Round(GameConstants.BaseSpawnBarCenterX * scaleX),
-            RowY = windowTop + (int)Math.Round(GameConstants.BaseSpawnBarRowY * scaleY),
-            Pitch = Math.Max(1, (int)Math.Round(GameConstants.BaseSpawnIconPitch * iconScale)),
-            Diameter = Math.Max(1, (int)Math.Round(GameConstants.BaseSpawnIconDiameter * iconScale)),
-            GlyphBox = Math.Max(1, (int)Math.Round(GameConstants.BaseSpawnGlyphBox * iconScale)),
+            CenterX = windowLeft + (int)Math.Round(baseCenterX * scaleX),
+            RowY = windowTop + (int)Math.Round(baseRowY * scaleY),
+            Pitch = Math.Max(1, (int)Math.Round(basePitch * iconScale)),
+            Diameter = Math.Max(1, (int)Math.Round(baseDiameter * iconScale)),
+            GlyphBox = Math.Max(1, (int)Math.Round(baseGlyphBox * iconScale)),
+            MaxIcons = maxIcons,
+            CircularBackground = circularBackground,
             WindowLeft = windowLeft,
             WindowTop = windowTop,
             ScaleX = scaleX,

@@ -32,7 +32,7 @@ public static class CoordinateScaler
         var preStartPixel = ScaleToScreen(profile.PreStartPixel.X, profile.PreStartPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var charSelectPixel = ScaleToScreen(profile.CharSelectPixel.X, profile.CharSelectPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var center = ScaleToScreen(GameConstants.BaseCenterX, GameConstants.BaseCenterY, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
-        var icon = ScaleToScreen(GameConstants.BaseIconX, GameConstants.BaseIconY, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
+        var icon = ScaleToScreen(profile.MarketplaceIcon.X, profile.MarketplaceIcon.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
 
         return new ScaledCoordinates
         {
