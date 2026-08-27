@@ -94,12 +94,13 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
+        var p = _runtime.Profile;
         try
         {
             var (r, g, b) = _screenCapture.GetPixelColor(coords.PreStartPixelX, coords.PreStartPixelY);
-            return Math.Abs(r - GameConstants.PreStartR) <= GameConstants.PreStartTolerance
-                && Math.Abs(g - GameConstants.PreStartG) <= GameConstants.PreStartTolerance
-                && Math.Abs(b - GameConstants.PreStartB) <= GameConstants.PreStartTolerance;
+            return Math.Abs(r - p.PreStartR) <= p.PreStartTolerance
+                && Math.Abs(g - p.PreStartG) <= p.PreStartTolerance
+                && Math.Abs(b - p.PreStartB) <= p.PreStartTolerance;
         }
         catch (Exception ex)
         {
@@ -116,12 +117,13 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
+        var p = _runtime.Profile;
         try
         {
             var (r, g, b) = _screenCapture.GetPixelColor(coords.CharSelectPixelX, coords.CharSelectPixelY);
-            return Math.Abs(r - GameConstants.CharSelectR) <= GameConstants.CharSelectTolerance
-                && Math.Abs(g - GameConstants.CharSelectG) <= GameConstants.CharSelectTolerance
-                && Math.Abs(b - GameConstants.CharSelectB) <= GameConstants.CharSelectTolerance;
+            return Math.Abs(r - p.CharSelectR) <= p.CharSelectTolerance
+                && Math.Abs(g - p.CharSelectG) <= p.CharSelectTolerance
+                && Math.Abs(b - p.CharSelectB) <= p.CharSelectTolerance;
         }
         catch (Exception ex)
         {
@@ -138,13 +140,13 @@ public sealed class StateDetector : IStateDetector
             return false;
         }
 
+        var p = _runtime.Profile;
         try
         {
             var (r, g, b) = _screenCapture.GetPixelColor(coords.HudPixelX, coords.HudPixelY);
-
-            // Same test as the HUD branch of SmartStateRecovery. Character select shares this
-            // accent colour, so callers must rule that out first - IsAtCharacterSelect does it.
-            return r >= 200 && g <= 60 && b is >= 80 and <= 170;
+            return Math.Abs(r - p.HudR) <= p.HudTolerance
+                && Math.Abs(g - p.HudG) <= p.HudTolerance
+                && Math.Abs(b - p.HudB) <= p.HudTolerance;
         }
         catch (Exception ex)
         {
@@ -200,7 +202,7 @@ public sealed class StateDetector : IStateDetector
             return;
         }
 
-        if (rHud >= 200 && gHud <= 60 && bHud is >= 80 and <= 170)
+        if (IsInGame())
         {
             _logger.Info("Status: In game. Opening tablet and marketplace...");
             OpenMarketplace(gameHandle, coords, timings);

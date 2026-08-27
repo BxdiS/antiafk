@@ -5,8 +5,10 @@ namespace AntiAfk.Core.Services;
 
 public static class CoordinateScaler
 {
-    public static ScaledCoordinates Apply(int winLeft, int winTop, int winWidth, int winHeight, int screenWidth, int screenHeight)
+    public static ScaledCoordinates Apply(int winLeft, int winTop, int winWidth, int winHeight, int screenWidth, int screenHeight, ProjectProfile? profile = null)
     {
+        profile ??= ProjectProfile.Majestic;
+
         if (winWidth <= 0 || winHeight <= 0)
         {
             winLeft = 0;
@@ -25,10 +27,10 @@ public static class CoordinateScaler
         var warnBox = ScaleBoxToScreen(GameConstants.BaseWarnBox, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var warnClick = ScaleToScreen(GameConstants.BaseWarnClick.X, GameConstants.BaseWarnClick.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var mapPixel = ScaleToScreen(GameConstants.BaseMapPixel.X, GameConstants.BaseMapPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
-        var hudPixel = ScaleToScreen(GameConstants.BaseHudPixel.X, GameConstants.BaseHudPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
+        var hudPixel = ScaleToScreen(profile.HudPixel.X, profile.HudPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var mpPixel = ScaleToScreen(GameConstants.BaseMpPixel.X, GameConstants.BaseMpPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
-        var preStartPixel = ScaleToScreen(GameConstants.BasePreStartPixel.X, GameConstants.BasePreStartPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
-        var charSelectPixel = ScaleToScreen(GameConstants.BaseCharSelectPixel.X, GameConstants.BaseCharSelectPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
+        var preStartPixel = ScaleToScreen(profile.PreStartPixel.X, profile.PreStartPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
+        var charSelectPixel = ScaleToScreen(profile.CharSelectPixel.X, profile.CharSelectPixel.Y, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var center = ScaleToScreen(GameConstants.BaseCenterX, GameConstants.BaseCenterY, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
         var icon = ScaleToScreen(GameConstants.BaseIconX, GameConstants.BaseIconY, winLeft, winTop, winWidth, winHeight, screenWidth, screenHeight);
 
