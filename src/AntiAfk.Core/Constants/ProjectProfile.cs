@@ -146,7 +146,10 @@ public sealed class ProjectProfile
             MaxIcons = 7,
             CircularBackground = false,
             LeftAligned = true,
-            DiscMaxLuminance = 140,
+            // Actual strip pixels sit at luminance 30-50; map shadows on either side reach 100+.
+            // 140 (initial guess) caught the shadows too, so a position past the bar's right edge
+            // scored disc ≈ 100% and looked like a third icon. 80 keeps only the strip itself.
+            DiscMaxLuminance = 80,
             MinDiscRatio = 0.55,
             MinSlotScore = 0.35,
             GlyphWhiteRampLow = 90,

@@ -106,6 +106,7 @@ static void Report(string file, string? cropDirectory, ProjectProfile profile)
         $"pitch {layout.Pitch}, disc {layout.Diameter}, glyph box {layout.GlyphBox}");
 
     var strip = Crop(grid, layout);
+    ScanBarExtent(strip, layout);
     var reading = SpawnBarDetector.Detect(strip, layout);
 
     if (reading is null)
@@ -256,6 +257,73 @@ static void ScanRows(PixelGrid strip, SpawnBarLayout layout)
         Console.WriteLine(
             $"  y={rowY,4} best glyph={bestGlyph:P1} at x={bestX,5} (score={bestScore:F2}, disc={bestDisc:P1})");
     }
+}
+
+// Finds where the dark bar background actually starts and ends horizontally, by looking at what
+// share of each column is dark. This says whether the "3rd icon" the detector found sits inside
+// the real bar or on the map beyond it.
+static void ScanBarExtent(PixelGrid strip, SpawnBarLayout layout)
+{
+    var darkPerCol = new double[strip.Width];
+    for (var lx = 0; lx < strip.Width; lx++)
+    {
+        var dark = 0;
+        for (var ly = 0; ly < strip.Height; ly++)
+        {
+            var (r, g, b) = strip[lx, ly];
+            if (PixelGrid.Luminance(r, g, b) <= layout.DiscMaxLuminance)
+            {
+                dark++;
+            }
+        }
+        darkPerCol[lx] = dark / (double)strip.Height;
+    }
+
+    // Report the darkness heat map: `#` = ≥ 80% dark, `.` = 40-80%, ` ` = < 40% (map showing through).
+    Console.WriteLine("Dark bar background across the strip (# = solid bar, . = partial, ' ' = map):");
+    var head = new System.Text.StringBuilder("     ");
+    for (var col = 0; col < strip.Width; col++)
+    {
+        if (col % 20 == 0)
+        {
+            head.Append($"{strip.OriginX + col,-20}");
+        }
+    }
+    Console.WriteLine(head);
+
+    var line = new System.Text.StringBuilder("     ");
+    for (var col = 0; col < strip.Width; col++)
+    {
+        line.Append(darkPerCol[col] >= 0.80 ? '#' : darkPerCol[col] >= 0.40 ? '.' : ' ');
+    }
+    Console.WriteLine(line);
+
+    // Same again but at a stricter threshold — the actual bar background is around lum 30-50,
+    // dark map shadows sit higher. This second pass shows just the bar itself.
+    var strictLumThreshold = 60;
+    var strictPerCol = new double[strip.Width];
+    for (var lx = 0; lx < strip.Width; lx++)
+    {
+        var dark = 0;
+        for (var ly = 0; ly < strip.Height; ly++)
+        {
+            var (r, g, b) = strip[lx, ly];
+            if (PixelGrid.Luminance(r, g, b) <= strictLumThreshold)
+            {
+                dark++;
+            }
+        }
+        strictPerCol[lx] = dark / (double)strip.Height;
+    }
+
+    Console.WriteLine($"Same, but only counting luminance <= {strictLumThreshold} (the actual bar, not map shadows):");
+    var strictLine = new System.Text.StringBuilder("     ");
+    for (var col = 0; col < strip.Width; col++)
+    {
+        strictLine.Append(strictPerCol[col] >= 0.70 ? '#' : strictPerCol[col] >= 0.30 ? '.' : ' ');
+    }
+    Console.WriteLine(strictLine);
+    Console.WriteLine();
 }
 
 // Sums glyph pixels per column across the whole strip. Local maxima are icon centres. Prints the

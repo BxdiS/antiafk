@@ -339,6 +339,59 @@ public static class SpawnIconCatalog
                     "0000000000000000")
             ]),
 
+        // Russia Online — exit_point. RO renders this icon differently from Majestic (a framed
+        // picture with a location marker overlay, not a pin sitting on a map), so it needs its own
+        // glyph name. The id stays "exit_point" so the same spawn priority list works for both
+        // projects. Signature from ro-spawn.png at 1920x1080.
+        new SpawnIconTemplate(
+            "ro_exit",
+            ["exit_point"],
+            [
+                SpawnIconSignature.FromHex(
+                    "6f8002f900000000" +
+                    "9f8000fb00000000" +
+                    "2fd639f800000000" +
+                    "06fffff200000000" +
+                    "00efffc0fffff600" +
+                    "005ffc0affff9356" +
+                    "000af56fffe008fe" +
+                    "007004ffe8269fff" +
+                    "00fffffc009fffff" +
+                    "01fffff200ffffff" +
+                    "08fff8068318bfff" +
+                    "0ffc00ffffb005ff" +
+                    "0f900cfffffc300c" +
+                    "0518fffffffffb61" +
+                    "006ffffffffffff5" +
+                    "0000000000000000")
+            ]),
+
+        // Russia Online — organisation/gang HQ. New spawn type, no Majestic equivalent. The id
+        // is "organization" so a player's priority list can name it directly. Signature from
+        // ro-spawn.png at 1920x1080.
+        new SpawnIconTemplate(
+            "ro_organization",
+            ["organization"],
+            [
+                SpawnIconSignature.FromHex(
+                    "0000000000000000" +
+                    "0000000000500000" +
+                    "00000168ffc00000" +
+                    "00001fffffc00000" +
+                    "0000cfffffc00000" +
+                    "0000ff225fc00000" +
+                    "0000ffffffc09900" +
+                    "0000ff226fc09fc0" +
+                    "0000ffffffc09ff0" +
+                    "0000ff33cfc09ff0" +
+                    "0000ff888fc09fe0" +
+                    "0000ffffffc09b00" +
+                    "0000ffffffc09500" +
+                    "0000ffffffb05000" +
+                    "0000011111000000" +
+                    "0000000000000000")
+            ]),
+
         // An office block with a column of windows beside it.
         new SpawnIconTemplate(
             "office",
