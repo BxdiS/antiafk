@@ -5,18 +5,20 @@
 // comes from: run it over a screenshot, check the glyphs it prints look like the icons on screen,
 // and paste the lines it emits into SpawnIconCatalog.
 //
-//   dotnet run --project tools/GenerateSpawnIcons -- <screenshot.png|folder> [more...] [--crops <dir>]
+//   dotnet run --project tools/GenerateSpawnIcons -- <screenshot.png|folder> [more...] [--crops <dir>] [--project majestic|russia_online]
 //
 // Also prints the per-position numbers the detector worked from, which is what to look at when a
 // screenshot does not detect: it says whether a slot was missed for want of a disc or a glyph.
 
 using System.Drawing;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Models;
 using AntiAfk.Core.Vision;
 using AntiAfk.Infrastructure.Services;
 
 var inputs = new List<string>();
 string? cropDirectory = null;
+var project = GameConstants.DefaultProject;
 
 for (var i = 0; i < args.Length; i++)
 {
@@ -32,15 +34,30 @@ for (var i = 0; i < args.Length; i++)
         continue;
     }
 
+    if (args[i] is "--project" or "-p")
+    {
+        if (i + 1 >= args.Length)
+        {
+            Console.Error.WriteLine("--project needs a value (majestic or russia_online).");
+            return 2;
+        }
+
+        project = args[++i];
+        continue;
+    }
+
     inputs.Add(args[i]);
 }
 
 if (inputs.Count == 0)
 {
     Console.Error.WriteLine(
-        "Usage: dotnet run --project tools/GenerateSpawnIcons -- <screenshot.png|folder> [...] [--crops <dir>]");
+        "Usage: dotnet run --project tools/GenerateSpawnIcons -- <screenshot.png|folder> [...] [--crops <dir>] [--project majestic|russia_online]");
     return 2;
 }
+
+var profile = ProjectProfile.ForProject(project);
+Console.WriteLine($"Project: {profile.Id}");
 
 var files = new List<string>();
 foreach (var input in inputs)
@@ -70,18 +87,25 @@ foreach (var file in files)
 {
     Console.WriteLine();
     Console.WriteLine($"=== {Path.GetFileName(file)} ===");
-    Report(file, cropDirectory);
+    Report(file, cropDirectory, profile);
 }
 
 return 0;
 
-static void Report(string file, string? cropDirectory)
+static void Report(string file, string? cropDirectory, ProjectProfile profile)
 {
     using var bitmap = new Bitmap(file);
 
     // A screenshot is the game window, so it stands in for one at (0,0) of its own size. That is
     // also what makes a 1440p screenshot work here without a second set of measurements.
-    var layout = SpawnBarLayout.ForWindow(0, 0, bitmap.Width, bitmap.Height);
+    var layout = SpawnBarLayout.ForWindow(
+        profile.SpawnBarCenterX, profile.SpawnBarRowY, profile.SpawnBarPitch,
+        profile.SpawnBarDiameter, profile.SpawnBarGlyphBox,
+        profile.SpawnBarMaxIcons, profile.SpawnBarCircularBackground,
+        0, 0, bitmap.Width, bitmap.Height,
+        profile.SpawnBarDiscMaxLuminance, profile.SpawnBarMinDiscRatio, profile.SpawnBarMinSlotScore,
+        profile.SpawnBarGlyphWhiteRampLow, profile.SpawnBarGlyphWhiteRampHigh,
+        profile.SpawnBarLeftAligned, profile.SpawnBarMinGlyphRatio, profile.SpawnBarTargetGlyphRatio);
     var grid = ScreenCaptureService.ToPixelGrid(bitmap, 0, 0);
 
     Console.WriteLine(
@@ -95,6 +119,19 @@ static void Report(string file, string? cropDirectory)
     {
         Console.WriteLine("No spawn bar detected. Positions on the expected row, best first:");
         DumpRow(strip, layout, layout.RowY);
+        Console.WriteLine();
+        Console.WriteLine("Scanning ±80 pixels around expected row for any glyph signal:");
+        ScanRows(strip, layout);
+        Console.WriteLine();
+        Console.WriteLine("Glyph pixel column density (peaks are icon centres):");
+        DumpGlyphPeaks(strip, layout);
+        Console.WriteLine();
+        Console.WriteLine("Glyph mask (# = glyph pixel, . = dark background, ' ' = bright/other):");
+        DumpGlyphMask(strip, layout);
+        Console.WriteLine();
+        var dumpPath = Path.ChangeExtension(file, ".strip.png");
+        DumpStripPng(strip, dumpPath);
+        Console.WriteLine($"Captured strip saved to {dumpPath}");
         return;
     }
 
@@ -188,6 +225,215 @@ static void DumpRow(PixelGrid strip, SpawnBarLayout layout, int rowY)
             $"  x={probe.CenterX,5} score={probe.Score:F2} glyph={probe.GlyphRatio:P1} " +
             $"disc={probe.DiscRatio:P1}  {verdict}");
     }
+}
+
+// Sweeps candidate rows and reports the best score found on each one - so a screenshot where the
+// bar sits a few rows off can be found by eye, without guessing at row Y.
+static void ScanRows(PixelGrid strip, SpawnBarLayout layout)
+{
+    var half = layout.Pitch / 2;
+    var stripBottomScreen = strip.OriginY + strip.Height - 1;
+    var minY = Math.Max(strip.OriginY + layout.Diameter / 2 + 1, layout.RowY - 80);
+    var maxY = Math.Min(stripBottomScreen - layout.Diameter / 2 - 1, layout.RowY + 80);
+
+    for (var rowY = minY; rowY <= maxY; rowY += 4)
+    {
+        var bestScore = 0.0;
+        var bestGlyph = 0.0;
+        var bestDisc = 0.0;
+        var bestX = 0;
+
+        for (var x = layout.CenterX - layout.Pitch * 6; x <= layout.CenterX + layout.Pitch * 6; x += half)
+        {
+            var probe = SpawnBarDetector.Probe(strip, layout, x, rowY);
+            if (probe is null)
+            {
+                continue;
+            }
+
+            if (probe.GlyphRatio > bestGlyph)
+            {
+                bestGlyph = probe.GlyphRatio;
+                bestScore = probe.Score;
+                bestDisc = probe.DiscRatio;
+                bestX = probe.CenterX;
+            }
+        }
+
+        Console.WriteLine(
+            $"  y={rowY,4} best glyph={bestGlyph:P1} at x={bestX,5} (score={bestScore:F2}, disc={bestDisc:P1})");
+    }
+}
+
+// Sums glyph pixels per column across the whole strip. Local maxima are icon centres. Prints the
+// top few peaks with their screen-X and the pitches between neighbours - which is what to plug
+// back into ProjectProfile.SpawnBar* if the configured layout does not match.
+static void DumpGlyphPeaks(PixelGrid strip, SpawnBarLayout layout)
+{
+    var perColumn = new int[strip.Width];
+    for (var lx = 0; lx < strip.Width; lx++)
+    {
+        var count = 0;
+        for (var ly = 0; ly < strip.Height; ly++)
+        {
+            var (r, g, b) = strip[lx, ly];
+            if (SpawnIconSignature.IsGlyphPixel(r, g, b, layout.GlyphWhiteRampLow, layout.GlyphWhiteRampHigh))
+            {
+                count++;
+            }
+        }
+        perColumn[lx] = count;
+    }
+
+    // Smooth with a small window so single-pixel noise does not read as a peak.
+    var smoothed = new int[strip.Width];
+    for (var lx = 0; lx < strip.Width; lx++)
+    {
+        var sum = 0;
+        for (var d = -3; d <= 3; d++)
+        {
+            var i = lx + d;
+            if (i >= 0 && i < strip.Width)
+            {
+                sum += perColumn[i];
+            }
+        }
+        smoothed[lx] = sum;
+    }
+
+    // Segment into runs where smoothed >= minPeak with at least a gap wide enough to separate two
+    // icons between runs. For each run, compute the pixel-weighted centre of mass — that is the
+    // visual centre of the icon, not just the column with the most pixels.
+    var minCol = 4;
+    var minRunLen = 6;
+    var runs = new List<(int Start, int End)>();
+    var runStart = -1;
+
+    for (var lx = 0; lx < strip.Width; lx++)
+    {
+        if (smoothed[lx] >= minCol)
+        {
+            if (runStart < 0) runStart = lx;
+        }
+        else if (runStart >= 0)
+        {
+            if (lx - runStart >= minRunLen)
+            {
+                runs.Add((runStart, lx - 1));
+            }
+            runStart = -1;
+        }
+    }
+    if (runStart >= 0 && strip.Width - runStart >= minRunLen)
+    {
+        runs.Add((runStart, strip.Width - 1));
+    }
+
+    var icons = new List<(int ScreenX, int Weight, int Width)>();
+    foreach (var (s, e) in runs)
+    {
+        long wsum = 0;
+        long weight = 0;
+        for (var lx = s; lx <= e; lx++)
+        {
+            wsum += (long)lx * smoothed[lx];
+            weight += smoothed[lx];
+        }
+        if (weight == 0) continue;
+        var localCentre = (int)(wsum / weight);
+        icons.Add((strip.OriginX + localCentre, (int)weight, e - s + 1));
+    }
+
+    Console.WriteLine($"  found {icons.Count} glyph cluster(s):");
+    for (var i = 0; i < icons.Count; i++)
+    {
+        var pitch = i > 0 ? $"  pitch from prev = {icons[i].ScreenX - icons[i - 1].ScreenX}" : "";
+        Console.WriteLine($"  x={icons[i].ScreenX,5}  weight={icons[i].Weight,4}  width={icons[i].Width,3}{pitch}");
+    }
+
+    if (icons.Count >= 2)
+    {
+        var totalSpan = icons[^1].ScreenX - icons[0].ScreenX;
+        var pitchAvg = totalSpan / (double)(icons.Count - 1);
+        var centre = (icons[0].ScreenX + icons[^1].ScreenX) / 2;
+        Console.WriteLine($"  → bar centre {centre}, average pitch {pitchAvg:F1}");
+    }
+}
+
+// ASCII visualisation of the strip: each character is a 2x2 sample. `#` means the sample is a
+// glyph pixel under the layout's whiteness ramp; `.` means dark background; ' ' means everything
+// else. The row header prints screen-X every 20 characters so icon positions can be read off.
+static void DumpGlyphMask(PixelGrid strip, SpawnBarLayout layout)
+{
+    var cellW = 2;
+    var cellH = 2;
+    var cols = strip.Width / cellW;
+    var rows = strip.Height / cellH;
+
+    var header = new System.Text.StringBuilder("     ");
+    for (var col = 0; col < cols; col++)
+    {
+        if (col % 20 == 0)
+        {
+            var screenX = strip.OriginX + col * cellW;
+            header.Append($"{screenX,-20}");
+        }
+    }
+    Console.WriteLine(header.ToString());
+
+    for (var row = 0; row < rows; row++)
+    {
+        var screenY = strip.OriginY + row * cellH;
+        var line = new System.Text.StringBuilder($"{screenY,4} ");
+
+        for (var col = 0; col < cols; col++)
+        {
+            var glyph = 0;
+            var dark = 0;
+            for (var dy = 0; dy < cellH; dy++)
+            {
+                for (var dx = 0; dx < cellW; dx++)
+                {
+                    var lx = col * cellW + dx;
+                    var ly = row * cellH + dy;
+                    if (!strip.Contains(lx, ly))
+                    {
+                        continue;
+                    }
+
+                    var (r, g, b) = strip[lx, ly];
+                    if (SpawnIconSignature.IsGlyphPixel(r, g, b, layout.GlyphWhiteRampLow, layout.GlyphWhiteRampHigh))
+                    {
+                        glyph++;
+                    }
+                    else if (PixelGrid.Luminance(r, g, b) <= layout.DiscMaxLuminance)
+                    {
+                        dark++;
+                    }
+                }
+            }
+
+            line.Append(glyph >= 2 ? '#' : dark >= 2 ? '.' : ' ');
+        }
+
+        Console.WriteLine(line.ToString());
+    }
+}
+
+// Dumps the captured strip as a PNG so the sampled area can be looked at directly.
+static void DumpStripPng(PixelGrid strip, string path)
+{
+    using var bitmap = new Bitmap(strip.Width, strip.Height);
+    for (var y = 0; y < strip.Height; y++)
+    {
+        for (var x = 0; x < strip.Width; x++)
+        {
+            var (r, g, b) = strip[x, y];
+            bitmap.SetPixel(x, y, Color.FromArgb(r, g, b));
+        }
+    }
+
+    bitmap.Save(path);
 }
 
 static void SaveCrop(string sourceFile, string cropDirectory, SpawnIconHit icon, SpawnBarLayout layout)

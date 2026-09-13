@@ -33,12 +33,13 @@ public sealed class SpawnIconSignature
 
     private const int CellCount = Grid * Grid;
 
-    /// Below this a pixel counts as fully disc. The discs measure in the 40-80 range against a
-    /// glyph at 250, so there is a wide gap to put the ramp in.
-    private const int WhiteRampLow = 120;
+    /// Default: below this a pixel counts as fully disc. Majestic's discs measure in the 40-80
+    /// range against a glyph at 250. Russia Online glyphs are drawn light grey, not white, and
+    /// use lower ramp values passed by the caller.
+    public const int DefaultWhiteRampLow = 120;
 
-    /// At or above this a pixel counts as fully glyph.
-    private const int WhiteRampHigh = 230;
+    /// Default: at or above this a pixel counts as fully glyph.
+    public const int DefaultWhiteRampHigh = 230;
 
     /// How far apart the channels may be before a bright pixel counts as coloured rather than
     /// white. The map shows through the disc tinted blue, so a bright but clearly blue pixel is
@@ -68,12 +69,13 @@ public sealed class SpawnIconSignature
     /// Whether a pixel is white enough to be part of a glyph. This is the yes/no version, used to
     /// find the glyph rather than to describe it - see SpawnBarDetector.
     /// </summary>
-    public static bool IsGlyphPixel(byte r, byte g, byte b) => Whiteness(r, g, b) >= 0.5;
+    public static bool IsGlyphPixel(byte r, byte g, byte b, int whiteRampLow = DefaultWhiteRampLow, int whiteRampHigh = DefaultWhiteRampHigh) =>
+        Whiteness(r, g, b, whiteRampLow, whiteRampHigh) >= 0.5;
 
     /// <summary>
     /// How much this pixel looks like glyph rather than disc, 0..1.
     /// </summary>
-    public static double Whiteness(byte r, byte g, byte b)
+    public static double Whiteness(byte r, byte g, byte b, int whiteRampLow = DefaultWhiteRampLow, int whiteRampHigh = DefaultWhiteRampHigh)
     {
         var max = Math.Max(r, Math.Max(g, b));
         var min = Math.Min(r, Math.Min(g, b));
@@ -83,17 +85,17 @@ public sealed class SpawnIconSignature
             return 0;
         }
 
-        if (min <= WhiteRampLow)
+        if (min <= whiteRampLow)
         {
             return 0;
         }
 
-        if (min >= WhiteRampHigh)
+        if (min >= whiteRampHigh)
         {
             return 1;
         }
 
-        return (min - WhiteRampLow) / (double)(WhiteRampHigh - WhiteRampLow);
+        return (min - whiteRampLow) / (double)(whiteRampHigh - whiteRampLow);
     }
 
     /// <summary>
@@ -109,10 +111,10 @@ public sealed class SpawnIconSignature
     /// same icon sampled from two screenshots lands on a different grid and the two signatures stop
     /// matching each other for reasons that have nothing to do with the icon.
     /// </summary>
-    public static SpawnIconSignature Sample(PixelGrid grid, int centerX, int centerY, int boxSize)
+    public static SpawnIconSignature Sample(PixelGrid grid, int centerX, int centerY, int boxSize, int whiteRampLow = DefaultWhiteRampLow, int whiteRampHigh = DefaultWhiteRampHigh)
     {
         var cells = new byte[CellCount];
-        var (glyphX, glyphY) = FindGlyphCenter(grid, centerX, centerY, boxSize);
+        var (glyphX, glyphY) = FindGlyphCenter(grid, centerX, centerY, boxSize, whiteRampLow, whiteRampHigh);
         var left = glyphX - boxSize / 2;
         var top = glyphY - boxSize / 2;
 
@@ -140,7 +142,7 @@ public sealed class SpawnIconSignature
 
                         total++;
                         var (r, g, b) = grid[x, y];
-                        whiteness += Whiteness(r, g, b);
+                        whiteness += Whiteness(r, g, b, whiteRampLow, whiteRampHigh);
                     }
                 }
 
@@ -164,7 +166,7 @@ public sealed class SpawnIconSignature
     /// sampled a row or two off. Two captures of the same icon then disagree about which row its
     /// head is on, which is not a difference between icons at all.
     /// </summary>
-    private static (int X, int Y) FindGlyphCenter(PixelGrid grid, int centerX, int centerY, int boxSize)
+    private static (int X, int Y) FindGlyphCenter(PixelGrid grid, int centerX, int centerY, int boxSize, int whiteRampLow, int whiteRampHigh)
     {
         var reach = boxSize * 2 / 3;
         var reachSquared = reach * reach;
@@ -189,7 +191,7 @@ public sealed class SpawnIconSignature
                 }
 
                 var (r, g, b) = grid[x, y];
-                var whiteness = Whiteness(r, g, b);
+                var whiteness = Whiteness(r, g, b, whiteRampLow, whiteRampHigh);
                 if (whiteness <= 0)
                 {
                     continue;

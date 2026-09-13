@@ -75,6 +75,20 @@ public sealed class ProjectProfile
     public double? SpawnBarMinDiscRatio { get; init; }
     public double? SpawnBarMinSlotScore { get; init; }
 
+    // Glyph whiteness ramp. Majestic's glyphs are pure white; RO draws them as light grey and
+    // needs lower ramp values, otherwise none of its pixels count as glyph.
+    public int? SpawnBarGlyphWhiteRampLow { get; init; }
+    public int? SpawnBarGlyphWhiteRampHigh { get; init; }
+
+    // Bar alignment. False (default): icons centred around SpawnBarCenterX (Majestic). True: icons
+    // packed rightwards from SpawnBarCenterX, so slot 0 is at SpawnBarCenterX regardless of count.
+    public bool SpawnBarLeftAligned { get; init; }
+
+    // Glyph-share thresholds. Higher values reject positions with only a few stray bright pixels
+    // (map noise between icons) that would otherwise cross the initial score gate.
+    public double? SpawnBarMinGlyphRatio { get; init; }
+    public double? SpawnBarTargetGlyphRatio { get; init; }
+
     // Fallback spawn click when the detector cannot read the bar at all.
     public (int X, int Y) DefaultSpawn { get; init; } = (1053, 964);
 
@@ -142,20 +156,30 @@ public sealed class ProjectProfile
         MapMenuTolerance = 40,
         ProjectButton = GameConstants.ProjectRussiaOnline,
         MarketplaceIcon = (1026, 174),
-        SpawnBarCenterX = 960,
+        // The RO bar is anchored at the left, not centred. Icons pack rightwards from x=935 at
+        // pitch 50, so a 2-icon bar sits at 935/985 and a 3-icon bar at 935/985/1035 - measured
+        // by dumping glyph clusters on ro-spawn.png through GenerateSpawnIcons.
+        SpawnBarCenterX = 935,
         SpawnBarRowY = 967,
-        SpawnBarPitch = 47,
+        SpawnBarPitch = 50,
         SpawnBarDiameter = 44,
         SpawnBarGlyphBox = 22,
         SpawnBarMaxIcons = 5,
         SpawnBarCircularBackground = false,
+        SpawnBarLeftAligned = true,
         // The RO strip is a translucent panel on top of the map, noticeably lighter than
-        // Majestic's discs. These are loose enough to accept the strip as background while still
-        // rejecting bright map patches at the flanks.
+        // Majestic's discs. Loose enough to accept the strip as background while flanks stay out.
         SpawnBarDiscMaxLuminance = 140,
         SpawnBarMinDiscRatio = 0.55,
         SpawnBarMinSlotScore = 0.35,
-        DefaultSpawn = (913, 967)
+        // RO glyphs are drawn light grey (~140), not white. Lower ramp so their pixels register.
+        SpawnBarGlyphWhiteRampLow = 90,
+        SpawnBarGlyphWhiteRampHigh = 170,
+        // Map noise between icons registers 5-9% glyph pixels; real icons register 25-40%. The
+        // gate keeps the two apart. Target follows so a real icon still maxes out at strength 1.
+        SpawnBarMinGlyphRatio = 0.15,
+        SpawnBarTargetGlyphRatio = 0.25,
+        DefaultSpawn = (935, 967)
     };
 
     public static ProjectProfile ForProject(string project) =>

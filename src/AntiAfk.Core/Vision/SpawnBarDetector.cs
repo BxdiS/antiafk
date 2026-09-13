@@ -41,13 +41,8 @@ public static class SpawnBarDetector
 {
     private const int MinIcons = 2;
 
-    /// Glyph share of the glyph box at which a slot counts as fully convincing. The glyphs are
-    /// line art, not solid shapes, so even a large one covers well under a tenth of its box.
-    private const double TargetGlyphRatio = 0.06;
-
-    /// Below this there is no glyph, above it the box is not a glyph but something white behind
-    /// the bar - the map has bright patches and the disc does not cover the whole box.
-    private const double MinGlyphRatio = 0.015;
+    /// Above this the box is not a glyph but something white behind the bar - the map has bright
+    /// patches and the disc does not cover the whole box.
     private const double MaxGlyphRatio = 0.60;
 
     /// Default slot-score threshold. The actual value used comes from the layout, so a project
@@ -125,12 +120,15 @@ public static class SpawnBarDetector
         // The count is only right if the bar stops where this arrangement says it does. Without
         // this test every count from 2 up to the real one fits, because their slots are a subset
         // of the icons that are on screen.
+        //
+        // A left-aligned bar has no left flank by construction: slot 0 is the leftmost icon, and
+        // there is no valid position further left to check. Only the right flank is meaningful.
         var strongestFlank = 0.0;
-        foreach (var flankX in new[]
-                 {
-                     layout.SlotCenterX(-1, count),
-                     layout.SlotCenterX(count, count)
-                 })
+        var flanks = layout.LeftAligned
+            ? new[] { layout.SlotCenterX(count, count) }
+            : new[] { layout.SlotCenterX(-1, count), layout.SlotCenterX(count, count) };
+
+        foreach (var flankX in flanks)
         {
             var flank = ProbeSlot(strip, layout, flankX, rowY, cache);
             if (flank is null)
@@ -155,7 +153,7 @@ public static class SpawnBarDetector
                 index,
                 slot.CenterX,
                 rowY,
-                SpawnIconSignature.Sample(strip, strip.ToLocalX(slot.CenterX), strip.ToLocalY(rowY), layout.GlyphBox),
+                SpawnIconSignature.Sample(strip, strip.ToLocalX(slot.CenterX), strip.ToLocalY(rowY), layout.GlyphBox, layout.GlyphWhiteRampLow, layout.GlyphWhiteRampHigh),
                 slot.Score,
                 slot.GlyphRatio,
                 slot.DiscRatio);
@@ -262,7 +260,7 @@ public static class SpawnBarDetector
                 var (r, g, b) = strip[localX + dx, localY + dy];
                 glyphTotal++;
 
-                if (SpawnIconSignature.IsGlyphPixel(r, g, b))
+                if (SpawnIconSignature.IsGlyphPixel(r, g, b, layout.GlyphWhiteRampLow, layout.GlyphWhiteRampHigh))
                 {
                     glyphPixels++;
                 }
@@ -279,14 +277,14 @@ public static class SpawnBarDetector
 
     private static double ComputeScore(double discRatio, double glyphRatio, SpawnBarLayout layout)
     {
-        if (discRatio < layout.MinDiscRatio || glyphRatio < MinGlyphRatio || glyphRatio > MaxGlyphRatio)
+        if (discRatio < layout.MinDiscRatio || glyphRatio < layout.MinGlyphRatio || glyphRatio > MaxGlyphRatio)
         {
             return 0;
         }
 
         // Both parts have to hold up: a disc with nothing on it is the gap between two icons seen
         // against a dark rooftop, and a white shape with no disc under it is the map.
-        var glyphStrength = Math.Min(1.0, glyphRatio / TargetGlyphRatio);
+        var glyphStrength = Math.Min(1.0, glyphRatio / layout.TargetGlyphRatio);
         return discRatio * glyphStrength;
     }
 }
