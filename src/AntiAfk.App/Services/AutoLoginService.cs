@@ -340,7 +340,7 @@ public sealed class AutoLoginService : IAutoLoginService
 
         if (reading is null)
         {
-            var fallback = profile.DefaultSpawn;
+            var fallback = profile.SpawnBar.DefaultSpawn;
             var (fallbackX, fallbackY) = layout.ToScreen(fallback.X, fallback.Y);
             _logger.Warning(
                 $"Auto-login: could not read the spawn bar. Clicking the fixed fallback point " +
@@ -437,13 +437,8 @@ public sealed class AutoLoginService : IAutoLoginService
         }
 
         return SpawnBarLayout.ForWindow(
-            profile.SpawnBarCenterX, profile.SpawnBarRowY, profile.SpawnBarPitch,
-            profile.SpawnBarDiameter, profile.SpawnBarGlyphBox,
-            profile.SpawnBarMaxIcons, profile.SpawnBarCircularBackground,
-            game?.Left ?? 0, game?.Top ?? 0, game?.Width ?? 0, game?.Height ?? 0,
-            profile.SpawnBarDiscMaxLuminance, profile.SpawnBarMinDiscRatio, profile.SpawnBarMinSlotScore,
-            profile.SpawnBarGlyphWhiteRampLow, profile.SpawnBarGlyphWhiteRampHigh,
-            profile.SpawnBarLeftAligned, profile.SpawnBarMinGlyphRatio, profile.SpawnBarTargetGlyphRatio);
+            profile.SpawnBar,
+            game?.Left ?? 0, game?.Top ?? 0, game?.Width ?? 0, game?.Height ?? 0);
     }
 
     private PixelGrid? TryCaptureSpawnStrip(SpawnBarLayout layout)

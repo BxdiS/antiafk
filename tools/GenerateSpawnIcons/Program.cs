@@ -98,14 +98,7 @@ static void Report(string file, string? cropDirectory, ProjectProfile profile)
 
     // A screenshot is the game window, so it stands in for one at (0,0) of its own size. That is
     // also what makes a 1440p screenshot work here without a second set of measurements.
-    var layout = SpawnBarLayout.ForWindow(
-        profile.SpawnBarCenterX, profile.SpawnBarRowY, profile.SpawnBarPitch,
-        profile.SpawnBarDiameter, profile.SpawnBarGlyphBox,
-        profile.SpawnBarMaxIcons, profile.SpawnBarCircularBackground,
-        0, 0, bitmap.Width, bitmap.Height,
-        profile.SpawnBarDiscMaxLuminance, profile.SpawnBarMinDiscRatio, profile.SpawnBarMinSlotScore,
-        profile.SpawnBarGlyphWhiteRampLow, profile.SpawnBarGlyphWhiteRampHigh,
-        profile.SpawnBarLeftAligned, profile.SpawnBarMinGlyphRatio, profile.SpawnBarTargetGlyphRatio);
+    var layout = SpawnBarLayout.ForWindow(profile.SpawnBar, 0, 0, bitmap.Width, bitmap.Height);
     var grid = ScreenCaptureService.ToPixelGrid(bitmap, 0, 0);
 
     Console.WriteLine(

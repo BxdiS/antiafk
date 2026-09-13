@@ -3,87 +3,44 @@ using AntiAfk.Core.Constants;
 namespace AntiAfk.Core.Vision;
 
 /// <summary>
-/// Where the spawn bar is and how big it is, in screen pixels.
+/// A SpawnBarSpec scaled onto a real game window: pixel positions in screen coordinates, the
+/// window's own scale so 1080p coordinates can be turned into clicks, and every detection
+/// threshold copied off the spec so the detector reads a single object.
 ///
-/// The bar is a row of equally spaced round icons centred horizontally along the bottom of the
-/// map screen. Only the spacing and the row are fixed - the number of icons is whatever the player
-/// owns - so these are the numbers a detector needs to fit the icon count against the screen,
-/// rather than a table of positions like the rest of the app uses.
-///
-/// Unlike the other login coordinates these are scaled to the game window, because scaling a
-/// search region is free: nothing here is a click at a guessed position, so being approximately
-/// right is enough to find the bar, and the click that follows lands on a detected icon.
+/// Everything project-specific lives on SpawnBarSpec; this record only carries the scaling and
+/// the derived strip rectangle the capture reads.
 /// </summary>
 public sealed record SpawnBarLayout
 {
-    /// Screen X the row of icons is centred on.
     public required int CenterX { get; init; }
-
-    /// Screen Y of the icon centres.
     public required int RowY { get; init; }
-
-    /// Distance between the centres of two neighbouring icons.
     public required int Pitch { get; init; }
-
-    /// Diameter of the dark disc behind a glyph.
     public required int Diameter { get; init; }
-
-    /// Side of the square around an icon centre the glyph fits in.
     public required int GlyphBox { get; init; }
-
-    /// Most icons the bar can hold for this project.
     public required int MaxIcons { get; init; }
-
-    /// True for circular dark discs (Majestic), false for a rectangular dark strip (Russia Online).
     public required bool CircularBackground { get; init; }
+    public required bool LeftAligned { get; init; }
 
-    /// Pixel luminance at or below which a background pixel counts as dark. Majestic's discs sit
-    /// around 40-80; Russia Online's strip is subtler, so its default is a little higher.
-    public int DiscMaxLuminance { get; init; } = 110;
+    public required int DiscMaxLuminance { get; init; }
+    public required double MinDiscRatio { get; init; }
+    public required double MinSlotScore { get; init; }
+    public required int GlyphWhiteRampLow { get; init; }
+    public required int GlyphWhiteRampHigh { get; init; }
+    public required double MinGlyphRatio { get; init; }
+    public required double TargetGlyphRatio { get; init; }
 
-    /// Share of the sampled background that has to be dark for a slot to look like an icon.
-    public double MinDiscRatio { get; init; } = 0.70;
-
-    /// Score a slot has to reach for a fit, and that flanks have to stay below to rule out a
-    /// wrong count. Tuned lower on projects with subtler backgrounds so a strong glyph on a less
-    /// convincing background still counts, without letting flanks slip through.
-    public double MinSlotScore { get; init; } = 0.55;
-
-    /// Below this pixel value a glyph channel counts as fully background. Majestic draws glyphs
-    /// pure white so the default is high; Russia Online draws glyphs light grey and passes lower
-    /// values through so the same check accepts them.
-    public int GlyphWhiteRampLow { get; init; } = SpawnIconSignature.DefaultWhiteRampLow;
-
-    /// At or above this value a glyph channel counts as fully glyph.
-    public int GlyphWhiteRampHigh { get; init; } = SpawnIconSignature.DefaultWhiteRampHigh;
-
-    /// True: icons are anchored at CenterX and pack rightwards (CenterX is the leftmost icon).
-    /// False: icons are centred symmetrically around CenterX (Majestic). Russia Online uses the
-    /// left-anchored layout: at 2 icons they sit at 936/983, at 3 icons at 936/983/1030, etc.
-    public bool LeftAligned { get; init; }
-
-    /// Minimum glyph-pixel share of the glyph box for a slot to count. Below this the pixel is
-    /// treated as noise. Tightened on projects where the strip has stray bright content between
-    /// icons — flanks with a few glyph-like pixels would otherwise pass the fit check.
-    public double MinGlyphRatio { get; init; } = 0.015;
-
-    /// Target glyph share above which a slot scores at full glyph strength. Larger real icons
-    /// let this be higher without losing them, and a higher target penalises noisy positions.
-    public double TargetGlyphRatio { get; init; } = 0.06;
-
-    /// Top-left of the game window on screen, and how its size compares with the resolution
-    /// everything was measured at. Kept so a coordinate measured at 1080p can still be turned into
-    /// a screen position on this window - see <see cref="ToScreen"/>.
+    /// Top-left of the game window on screen, and how its size compares with the reference
+    /// resolution — so a 1080p coordinate can be turned into a click on this window.
     public required int WindowLeft { get; init; }
     public required int WindowTop { get; init; }
     public required double ScaleX { get; init; }
     public required double ScaleY { get; init; }
 
-    /// Where a point measured at 1920x1080 lands on this window.
+    /// Where a point measured at 1920×1080 lands on this window.
     public (int X, int Y) ToScreen(int baseX, int baseY) =>
         (WindowLeft + (int)Math.Round(baseX * ScaleX), WindowTop + (int)Math.Round(baseY * ScaleY));
 
-    /// How far above and below the row the captured strip reaches past the discs. Covers the row
+    /// How far above and below the row the captured strip reaches past the icons. Covers the row
     /// being a few pixels off, which the detector searches for rather than assuming.
     public int RowSearchMargin => Math.Max(8, Diameter / 8);
 
@@ -98,96 +55,53 @@ public sealed record SpawnBarLayout
 
     public int StripHeight => Diameter + RowSearchMargin * 2;
 
-    /// The Majestic bar as measured: 1920x1080, fullscreen, top-left of the game window at (0,0).
-    public static SpawnBarLayout Base { get; } = new()
-    {
-        CenterX = GameConstants.BaseSpawnBarCenterX,
-        RowY = GameConstants.BaseSpawnBarRowY,
-        Pitch = GameConstants.BaseSpawnIconPitch,
-        Diameter = GameConstants.BaseSpawnIconDiameter,
-        GlyphBox = GameConstants.BaseSpawnGlyphBox,
-        MaxIcons = GameConstants.MaxSpawnIcons,
-        CircularBackground = true,
-        WindowLeft = 0,
-        WindowTop = 0,
-        ScaleX = 1,
-        ScaleY = 1
-    };
+    /// The Majestic spec at 1920×1080, window at (0,0). Kept for GenerateSpawnIcons, which
+    /// operates on screenshots that are already at reference resolution.
+    public static SpawnBarLayout Base { get; } = ForWindow(new SpawnBarSpec(), 0, 0, 0, 0);
 
     /// <summary>
-    /// The Majestic bar on a game window of a given size and position. Scales the way
-    /// CoordinateScaler does — proportionally on each axis, then offset by the window's top-left.
+    /// The Majestic bar on a game window of a given size and position. Retained for callers that
+    /// only ever need the default project — the tool's default entry point does.
     /// </summary>
     public static SpawnBarLayout ForWindow(int windowLeft, int windowTop, int windowWidth, int windowHeight) =>
-        ForWindow(
-            GameConstants.BaseSpawnBarCenterX, GameConstants.BaseSpawnBarRowY,
-            GameConstants.BaseSpawnIconPitch, GameConstants.BaseSpawnIconDiameter, GameConstants.BaseSpawnGlyphBox,
-            GameConstants.MaxSpawnIcons, true,
-            windowLeft, windowTop, windowWidth, windowHeight);
+        ForWindow(new SpawnBarSpec(), windowLeft, windowTop, windowWidth, windowHeight);
 
     /// <summary>
-    /// A bar with project-specific base values, scaled to a game window.
+    /// A spec scaled onto a game window. When the window size is unknown (zero) the spec's
+    /// reference values are used as-is, so a screenshot at the reference resolution just works.
     /// </summary>
-    public static SpawnBarLayout ForWindow(
-        int baseCenterX, int baseRowY, int basePitch, int baseDiameter, int baseGlyphBox,
-        int maxIcons, bool circularBackground,
-        int windowLeft, int windowTop, int windowWidth, int windowHeight,
-        int? discMaxLuminance = null, double? minDiscRatio = null, double? minSlotScore = null,
-        int? glyphWhiteRampLow = null, int? glyphWhiteRampHigh = null,
-        bool leftAligned = false, double? minGlyphRatio = null, double? targetGlyphRatio = null)
+    public static SpawnBarLayout ForWindow(SpawnBarSpec spec, int windowLeft, int windowTop, int windowWidth, int windowHeight)
     {
-        if (windowWidth <= 0 || windowHeight <= 0)
-        {
-            return WithThresholds(new SpawnBarLayout
-            {
-                CenterX = baseCenterX,
-                RowY = baseRowY,
-                Pitch = basePitch,
-                Diameter = baseDiameter,
-                GlyphBox = baseGlyphBox,
-                MaxIcons = maxIcons,
-                CircularBackground = circularBackground,
-                WindowLeft = 0,
-                WindowTop = 0,
-                ScaleX = 1,
-                ScaleY = 1
-            }, discMaxLuminance, minDiscRatio, minSlotScore, glyphWhiteRampLow, glyphWhiteRampHigh, minGlyphRatio, targetGlyphRatio);
-        }
+        var hasWindow = windowWidth > 0 && windowHeight > 0;
+        var scaleX = hasWindow ? windowWidth / (double)GameConstants.BaseWidth : 1;
+        var scaleY = hasWindow ? windowHeight / (double)GameConstants.BaseHeight : 1;
+        var iconScale = hasWindow ? Math.Min(scaleX, scaleY) : 1;
+        var offsetX = hasWindow ? windowLeft : 0;
+        var offsetY = hasWindow ? windowTop : 0;
 
-        var scaleX = windowWidth / (double)GameConstants.BaseWidth;
-        var scaleY = windowHeight / (double)GameConstants.BaseHeight;
-        var iconScale = Math.Min(scaleX, scaleY);
-
-        return WithThresholds(new SpawnBarLayout
+        return new SpawnBarLayout
         {
-            CenterX = windowLeft + (int)Math.Round(baseCenterX * scaleX),
-            RowY = windowTop + (int)Math.Round(baseRowY * scaleY),
-            Pitch = Math.Max(1, (int)Math.Round(basePitch * iconScale)),
-            Diameter = Math.Max(1, (int)Math.Round(baseDiameter * iconScale)),
-            GlyphBox = Math.Max(1, (int)Math.Round(baseGlyphBox * iconScale)),
-            MaxIcons = maxIcons,
-            CircularBackground = circularBackground,
-            LeftAligned = leftAligned,
-            WindowLeft = windowLeft,
-            WindowTop = windowTop,
+            CenterX = offsetX + (int)Math.Round(spec.CenterX * scaleX),
+            RowY = offsetY + (int)Math.Round(spec.RowY * scaleY),
+            Pitch = Math.Max(1, (int)Math.Round(spec.Pitch * iconScale)),
+            Diameter = Math.Max(1, (int)Math.Round(spec.Diameter * iconScale)),
+            GlyphBox = Math.Max(1, (int)Math.Round(spec.GlyphBox * iconScale)),
+            MaxIcons = spec.MaxIcons,
+            CircularBackground = spec.CircularBackground,
+            LeftAligned = spec.LeftAligned,
+            DiscMaxLuminance = spec.DiscMaxLuminance,
+            MinDiscRatio = spec.MinDiscRatio,
+            MinSlotScore = spec.MinSlotScore,
+            GlyphWhiteRampLow = spec.GlyphWhiteRampLow,
+            GlyphWhiteRampHigh = spec.GlyphWhiteRampHigh,
+            MinGlyphRatio = spec.MinGlyphRatio,
+            TargetGlyphRatio = spec.TargetGlyphRatio,
+            WindowLeft = offsetX,
+            WindowTop = offsetY,
             ScaleX = scaleX,
             ScaleY = scaleY
-        }, discMaxLuminance, minDiscRatio, minSlotScore, glyphWhiteRampLow, glyphWhiteRampHigh, minGlyphRatio, targetGlyphRatio);
-    }
-
-    private static SpawnBarLayout WithThresholds(
-        SpawnBarLayout layout, int? discMaxLuminance, double? minDiscRatio, double? minSlotScore,
-        int? glyphWhiteRampLow, int? glyphWhiteRampHigh, double? minGlyphRatio, double? targetGlyphRatio) =>
-        layout with
-        {
-            DiscMaxLuminance = discMaxLuminance ?? layout.DiscMaxLuminance,
-            MinDiscRatio = minDiscRatio ?? layout.MinDiscRatio,
-            MinSlotScore = minSlotScore ?? layout.MinSlotScore,
-            GlyphWhiteRampLow = glyphWhiteRampLow ?? layout.GlyphWhiteRampLow,
-            GlyphWhiteRampHigh = glyphWhiteRampHigh ?? layout.GlyphWhiteRampHigh,
-            MinGlyphRatio = minGlyphRatio ?? layout.MinGlyphRatio,
-            TargetGlyphRatio = targetGlyphRatio ?? layout.TargetGlyphRatio
         };
+    }
 
     /// Screen X of slot <paramref name="index"/> when the bar holds <paramref name="count"/> icons.
     /// Centred: an even count straddles the centre and an odd one sits on it. Left-aligned: slot 0
