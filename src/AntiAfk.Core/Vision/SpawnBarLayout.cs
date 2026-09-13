@@ -17,6 +17,7 @@ public sealed record SpawnBarLayout
     public required int Pitch { get; init; }
     public required int Diameter { get; init; }
     public required int GlyphBox { get; init; }
+    public required int MinIcons { get; init; }
     public required int MaxIcons { get; init; }
     public required bool CircularBackground { get; init; }
     public required bool LeftAligned { get; init; }
@@ -86,6 +87,7 @@ public sealed record SpawnBarLayout
             Pitch = Math.Max(1, (int)Math.Round(spec.Pitch * iconScale)),
             Diameter = Math.Max(1, (int)Math.Round(spec.Diameter * iconScale)),
             GlyphBox = Math.Max(1, (int)Math.Round(spec.GlyphBox * iconScale)),
+            MinIcons = spec.MinIcons,
             MaxIcons = spec.MaxIcons,
             CircularBackground = spec.CircularBackground,
             LeftAligned = spec.LeftAligned,

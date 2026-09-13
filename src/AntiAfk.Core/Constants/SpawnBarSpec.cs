@@ -18,6 +18,12 @@ public sealed record SpawnBarSpec
     public int Pitch { get; init; } = GameConstants.BaseSpawnIconPitch;
     public int Diameter { get; init; } = GameConstants.BaseSpawnIconDiameter;
     public int GlyphBox { get; init; } = GameConstants.BaseSpawnGlyphBox;
+
+    /// Minimum icons the detector will try to fit. A bar with a single spawn point does exist on
+    /// Russia Online, so this drops to 1 there; Majestic's fitting logic historically starts at 2
+    /// because the second-icon flank is what tells "1 icon here" from "any pixel anywhere".
+    public int MinIcons { get; init; } = 2;
+
     public int MaxIcons { get; init; } = GameConstants.MaxSpawnIcons;
 
     /// True: icons are drawn on individual circular dark discs (Majestic). False: icons sit on a

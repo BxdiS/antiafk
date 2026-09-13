@@ -140,7 +140,10 @@ public sealed class ProjectProfile
             Pitch = 50,
             Diameter = 44,
             GlyphBox = 22,
-            MaxIcons = 5,
+            // A RO player can own anywhere from 1 to ~7 spawn points; the bar packs whatever
+            // they have. Detector tries every count in this range and picks the fit that matches.
+            MinIcons = 1,
+            MaxIcons = 7,
             CircularBackground = false,
             LeftAligned = true,
             DiscMaxLuminance = 140,

@@ -39,8 +39,6 @@ public sealed record SpawnSlotProbe(int CenterX, double Score, double GlyphRatio
 /// </summary>
 public static class SpawnBarDetector
 {
-    private const int MinIcons = 2;
-
     /// Above this the box is not a glyph but something white behind the bar - the map has bright
     /// patches and the disc does not cover the whole box.
     private const double MaxGlyphRatio = 0.60;
@@ -68,7 +66,7 @@ public static class SpawnBarDetector
         {
             var rowY = layout.RowY + offset;
 
-            for (var count = MinIcons; count <= layout.MaxIcons; count++)
+            for (var count = layout.MinIcons; count <= layout.MaxIcons; count++)
             {
                 var reading = TryFit(strip, layout, rowY, count, scores);
                 if (reading is not null && (best is null || reading.Confidence > best.Confidence))
