@@ -37,6 +37,18 @@ public sealed record SpawnBarLayout
     /// True for circular dark discs (Majestic), false for a rectangular dark strip (Russia Online).
     public required bool CircularBackground { get; init; }
 
+    /// Pixel luminance at or below which a background pixel counts as dark. Majestic's discs sit
+    /// around 40-80; Russia Online's strip is subtler, so its default is a little higher.
+    public int DiscMaxLuminance { get; init; } = 110;
+
+    /// Share of the sampled background that has to be dark for a slot to look like an icon.
+    public double MinDiscRatio { get; init; } = 0.70;
+
+    /// Score a slot has to reach for a fit, and that flanks have to stay below to rule out a
+    /// wrong count. Tuned lower on projects with subtler backgrounds so a strong glyph on a less
+    /// convincing background still counts, without letting flanks slip through.
+    public double MinSlotScore { get; init; } = 0.55;
+
     /// Top-left of the game window on screen, and how its size compares with the resolution
     /// everything was measured at. Kept so a coordinate measured at 1080p can still be turned into
     /// a screen position on this window - see <see cref="ToScreen"/>.
@@ -94,11 +106,12 @@ public sealed record SpawnBarLayout
     public static SpawnBarLayout ForWindow(
         int baseCenterX, int baseRowY, int basePitch, int baseDiameter, int baseGlyphBox,
         int maxIcons, bool circularBackground,
-        int windowLeft, int windowTop, int windowWidth, int windowHeight)
+        int windowLeft, int windowTop, int windowWidth, int windowHeight,
+        int? discMaxLuminance = null, double? minDiscRatio = null, double? minSlotScore = null)
     {
         if (windowWidth <= 0 || windowHeight <= 0)
         {
-            return new SpawnBarLayout
+            return WithThresholds(new SpawnBarLayout
             {
                 CenterX = baseCenterX,
                 RowY = baseRowY,
@@ -111,14 +124,14 @@ public sealed record SpawnBarLayout
                 WindowTop = 0,
                 ScaleX = 1,
                 ScaleY = 1
-            };
+            }, discMaxLuminance, minDiscRatio, minSlotScore);
         }
 
         var scaleX = windowWidth / (double)GameConstants.BaseWidth;
         var scaleY = windowHeight / (double)GameConstants.BaseHeight;
         var iconScale = Math.Min(scaleX, scaleY);
 
-        return new SpawnBarLayout
+        return WithThresholds(new SpawnBarLayout
         {
             CenterX = windowLeft + (int)Math.Round(baseCenterX * scaleX),
             RowY = windowTop + (int)Math.Round(baseRowY * scaleY),
@@ -131,8 +144,17 @@ public sealed record SpawnBarLayout
             WindowTop = windowTop,
             ScaleX = scaleX,
             ScaleY = scaleY
-        };
+        }, discMaxLuminance, minDiscRatio, minSlotScore);
     }
+
+    private static SpawnBarLayout WithThresholds(
+        SpawnBarLayout layout, int? discMaxLuminance, double? minDiscRatio, double? minSlotScore) =>
+        layout with
+        {
+            DiscMaxLuminance = discMaxLuminance ?? layout.DiscMaxLuminance,
+            MinDiscRatio = minDiscRatio ?? layout.MinDiscRatio,
+            MinSlotScore = minSlotScore ?? layout.MinSlotScore
+        };
 
     /// Screen X of slot <paramref name="index"/> when the bar holds <paramref name="count"/> icons.
     /// The row is centred, so an even count straddles the centre and an odd one sits on it.

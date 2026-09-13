@@ -440,7 +440,8 @@ public sealed class AutoLoginService : IAutoLoginService
             profile.SpawnBarCenterX, profile.SpawnBarRowY, profile.SpawnBarPitch,
             profile.SpawnBarDiameter, profile.SpawnBarGlyphBox,
             profile.SpawnBarMaxIcons, profile.SpawnBarCircularBackground,
-            game?.Left ?? 0, game?.Top ?? 0, game?.Width ?? 0, game?.Height ?? 0);
+            game?.Left ?? 0, game?.Top ?? 0, game?.Width ?? 0, game?.Height ?? 0,
+            profile.SpawnBarDiscMaxLuminance, profile.SpawnBarMinDiscRatio, profile.SpawnBarMinSlotScore);
     }
 
     private PixelGrid? TryCaptureSpawnStrip(SpawnBarLayout layout)

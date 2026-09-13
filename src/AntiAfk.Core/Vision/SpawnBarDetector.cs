@@ -41,14 +41,6 @@ public static class SpawnBarDetector
 {
     private const int MinIcons = 2;
 
-    /// A pixel at or below this luminance counts as part of the dark disc behind a glyph. The
-    /// discs are drawn dark and translucent over the map, so this has to clear the darkest parts
-    /// of the city seen from above without reaching the disc itself.
-    private const int DiscMaxLuminance = 110;
-
-    /// Share of the ring inside a disc that has to be dark for a slot to look like an icon.
-    private const double MinDiscRatio = 0.70;
-
     /// Glyph share of the glyph box at which a slot counts as fully convincing. The glyphs are
     /// line art, not solid shapes, so even a large one covers well under a tenth of its box.
     private const double TargetGlyphRatio = 0.06;
@@ -58,8 +50,9 @@ public static class SpawnBarDetector
     private const double MinGlyphRatio = 0.015;
     private const double MaxGlyphRatio = 0.60;
 
-    /// Score a slot has to reach to hold an icon, and that the positions past both ends have to
-    /// stay under for the count to be the right one.
+    /// Default slot-score threshold. The actual value used comes from the layout, so a project
+    /// with subtler backgrounds can lower it without changing this constant. Kept public because
+    /// the icon-generation tool reports against the default in its per-position summary.
     public const double MinSlotScore = 0.55;
 
     /// Step used when searching for the exact row. Finer than this measures nothing: the glyph box
@@ -120,7 +113,7 @@ public static class SpawnBarDetector
             var centerX = layout.SlotCenterX(index, count);
             var score = ProbeSlot(strip, layout, centerX, rowY, cache);
 
-            if (score is null || score.Score < MinSlotScore)
+            if (score is null || score.Score < layout.MinSlotScore)
             {
                 return null;
             }
@@ -146,7 +139,7 @@ public static class SpawnBarDetector
                 continue;
             }
 
-            if (flank.Score >= MinSlotScore)
+            if (flank.Score >= layout.MinSlotScore)
             {
                 return null;
             }
@@ -220,7 +213,7 @@ public static class SpawnBarDetector
                     var (r, g, b) = strip[localX + dx, localY + dy];
                     ringTotal++;
 
-                    if (PixelGrid.Luminance(r, g, b) <= DiscMaxLuminance)
+                    if (PixelGrid.Luminance(r, g, b) <= layout.DiscMaxLuminance)
                     {
                         ringDark++;
                     }
@@ -248,7 +241,7 @@ public static class SpawnBarDetector
                     var (r, g, b) = strip[localX + dx, localY + dy];
                     ringTotal++;
 
-                    if (PixelGrid.Luminance(r, g, b) <= DiscMaxLuminance)
+                    if (PixelGrid.Luminance(r, g, b) <= layout.DiscMaxLuminance)
                     {
                         ringDark++;
                     }
@@ -277,16 +270,16 @@ public static class SpawnBarDetector
         }
 
         var glyphRatio = glyphTotal == 0 ? 0 : glyphPixels / (double)glyphTotal;
-        var score = ComputeScore(discRatio, glyphRatio);
+        var score = ComputeScore(discRatio, glyphRatio, layout);
 
         var result = new SpawnSlotProbe(centerX, score, glyphRatio, discRatio);
         cache[(rowY, centerX)] = result;
         return result;
     }
 
-    private static double ComputeScore(double discRatio, double glyphRatio)
+    private static double ComputeScore(double discRatio, double glyphRatio, SpawnBarLayout layout)
     {
-        if (discRatio < MinDiscRatio || glyphRatio < MinGlyphRatio || glyphRatio > MaxGlyphRatio)
+        if (discRatio < layout.MinDiscRatio || glyphRatio < MinGlyphRatio || glyphRatio > MaxGlyphRatio)
         {
             return 0;
         }

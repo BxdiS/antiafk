@@ -69,6 +69,12 @@ public sealed class ProjectProfile
     public int SpawnBarMaxIcons { get; init; } = GameConstants.MaxSpawnIcons;
     public bool SpawnBarCircularBackground { get; init; } = true;
 
+    // Detection thresholds — null keeps SpawnBarLayout's defaults (tuned for Majestic). RO's
+    // rectangular strip is subtler than Majestic's discs, so it uses looser values.
+    public int? SpawnBarDiscMaxLuminance { get; init; }
+    public double? SpawnBarMinDiscRatio { get; init; }
+    public double? SpawnBarMinSlotScore { get; init; }
+
     // Fallback spawn click when the detector cannot read the bar at all.
     public (int X, int Y) DefaultSpawn { get; init; } = (1053, 964);
 
@@ -143,6 +149,12 @@ public sealed class ProjectProfile
         SpawnBarGlyphBox = 22,
         SpawnBarMaxIcons = 5,
         SpawnBarCircularBackground = false,
+        // The RO strip is a translucent panel on top of the map, noticeably lighter than
+        // Majestic's discs. These are loose enough to accept the strip as background while still
+        // rejecting bright map patches at the flanks.
+        SpawnBarDiscMaxLuminance = 140,
+        SpawnBarMinDiscRatio = 0.55,
+        SpawnBarMinSlotScore = 0.35,
         DefaultSpawn = (913, 967)
     };
 
