@@ -5,6 +5,7 @@ namespace AntiAfk.Core.Models;
 public sealed class AppConfig
 {
     public string Language { get; set; } = "ru";
+    public string Project { get; set; } = string.Empty;
     public string LauncherPath { get; set; } = string.Empty;
     public TimingSettings Timings { get; set; } = TimingSettings.CreateDefault();
     public SpawnSettings Spawn { get; set; } = new();

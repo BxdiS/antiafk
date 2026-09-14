@@ -115,7 +115,79 @@ public sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        if (string.IsNullOrEmpty(_configService.Current.Project))
+        {
+            var chosen = PromptForProject();
+            if (chosen is null)
+                return;
+
+            _configService.Current.Project = chosen;
+
+            var displayName = chosen == "russia_online"
+                ? "Russia Online"
+                : "Majestic RP";
+
+            _notifyIcon.BalloonTipTitle = AppBranding.DisplayName;
+            _notifyIcon.BalloonTipText = _localization.Get("notify.project_chosen")
+                .Replace("{project}", displayName);
+            _notifyIcon.ShowBalloonTip(3000);
+        }
+
         _engineHost.Start();
+    }
+
+    private string? PromptForProject()
+    {
+        using var form = new Form
+        {
+            Text = AppBranding.DisplayName,
+            Width = 340,
+            Height = 180,
+            StartPosition = FormStartPosition.CenterScreen,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        try
+        {
+            form.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        }
+        catch
+        {
+        }
+
+        var label = new Label
+        {
+            Text = _localization.Get("project.choose"),
+            AutoSize = true,
+            Location = new Point(16, 16)
+        };
+
+        var combo = new ComboBox
+        {
+            Location = new Point(16, 44),
+            Width = 280,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        combo.Items.AddRange(["Majestic RP", "Russia Online"]);
+        combo.SelectedIndex = 0;
+
+        var ok = new Button
+        {
+            Text = "OK",
+            Location = new Point(196, 90),
+            Width = 100,
+            DialogResult = DialogResult.OK
+        };
+
+        form.Controls.AddRange([label, combo, ok]);
+        form.AcceptButton = ok;
+
+        if (form.ShowDialog() != DialogResult.OK)
+            return null;
+
+        return combo.SelectedIndex == 1 ? "russia_online" : "majestic";
     }
 
     private async Task ApplyUpdateAsync()

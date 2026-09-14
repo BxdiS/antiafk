@@ -10,9 +10,9 @@ Important detail: logs and cycle progress live only in the process memory. The a
 
 | Menu item | What it does |
 |-----------|-------------|
-| Start / Stop | Starts and pauses the bot. Cycle state persists until you restart the app |
+| Start / Stop | Starts the bot. On the first start (or when no project is saved), a picker asks which project to use — Majestic RP or Russia Online. A balloon tip confirms the choice and suggests saving it in Settings. Cycle state persists until you restart the app |
 | Update | Shows when an update has been downloaded. The app replaces itself with the new version and restarts |
-| Settings | Language (RU/EN) and launcher path. Take effect immediately and trigger a save: on first Save, `AntiAFK.json` is created next to the exe with the current full configuration. A balloon tip on screen tells you if it was created |
+| Settings | Default project (Majestic RP / Russia Online), language (RU/EN) and launcher path. Take effect immediately and trigger a save: on first Save, `AntiAFK.json` is created next to the exe with the current full configuration. A balloon tip on screen tells you if it was created |
 | Open log | Current session log — a window in memory, not a file on disk |
 | Exit | Close completely |
 
@@ -88,6 +88,7 @@ Comments and trailing commas are accepted, even though strict JSON forbids both.
 | Field | What it does |
 |-------|--------------|
 | `language` | `ru` or `en` |
+| `project` | `majestic` or `russia_online`. Empty or missing means the picker asks on every start |
 | `launcherPath` | Empty means auto-detect the launcher in the standard Windows paths |
 | `spawn.priority` | Spawn points in the order you want them, best first, using the ids from the table above. An empty list always takes the leftmost icon on the bar |
 | `timings.*` | How long the bot waits for the game between steps, in seconds. A `{min, max}` pair is drawn at random inside the range |

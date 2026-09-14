@@ -13,6 +13,8 @@ public sealed class SettingsForm : Form
     private readonly AppConfig _workingCopy;
     private readonly Action<string>? _onSettingsSaved;
 
+    private readonly Label _projectLabel;
+    private readonly ComboBox _projectCombo;
     private readonly Label _languageLabel;
     private readonly ComboBox _languageCombo;
     private readonly Label _launcherPathLabel;
@@ -31,7 +33,7 @@ public sealed class SettingsForm : Form
 
         Text = AppBranding.DisplayName;
         Width = 560;
-        Height = 290;
+        Height = 340;
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
@@ -45,10 +47,21 @@ public sealed class SettingsForm : Form
             // ignored - icon is cosmetic only
         }
 
-        _languageLabel = new Label { AutoSize = true, Location = new Point(16, 16) };
-        _languageCombo = new ComboBox
+        _projectLabel = new Label { AutoSize = true, Location = new Point(16, 16) };
+        _projectCombo = new ComboBox
         {
             Location = new Point(16, 36),
+            Width = 200,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        _projectCombo.Items.AddRange(["Majestic RP", "Russia Online"]);
+        var projectIndex = _workingCopy.Project == "russia_online" ? 1 : 0;
+        _projectCombo.SelectedIndex = projectIndex;
+
+        _languageLabel = new Label { AutoSize = true, Location = new Point(16, 72) };
+        _languageCombo = new ComboBox
+        {
+            Location = new Point(16, 92),
             Width = 200,
             DropDownStyle = ComboBoxStyle.DropDownList
         };
@@ -56,21 +69,21 @@ public sealed class SettingsForm : Form
         var languageIndex = _languageCombo.Items.IndexOf(_workingCopy.Language);
         _languageCombo.SelectedIndex = languageIndex >= 0 ? languageIndex : 0;
 
-        _launcherPathLabel = new Label { AutoSize = true, Location = new Point(16, 76) };
-        _launcherPathText = new TextBox { Location = new Point(16, 96), Width = 420 };
-        _browseButton = new Button { Location = new Point(444, 95), Width = 90 };
+        _launcherPathLabel = new Label { AutoSize = true, Location = new Point(16, 132) };
+        _launcherPathText = new TextBox { Location = new Point(16, 152), Width = 420 };
+        _browseButton = new Button { Location = new Point(444, 151), Width = 90 };
         _browseButton.Click += BrowseButton_Click;
 
-        _cancelButton = new Button { Location = new Point(354, 140), Width = 100 };
+        _cancelButton = new Button { Location = new Point(354, 196), Width = 100 };
         _cancelButton.Click += (_, _) => Close();
 
-        _saveButton = new Button { Location = new Point(444, 140), Width = 90 };
+        _saveButton = new Button { Location = new Point(444, 196), Width = 90 };
         _saveButton.Click += SaveButton_Click;
 
         _creditsText = new Label
         {
             AutoSize = false,
-            Location = new Point(16, 190),
+            Location = new Point(16, 246),
             Width = 500,
             Height = 40,
             ForeColor = Color.FromArgb(0x6B, 0x72, 0x80),
@@ -78,6 +91,7 @@ public sealed class SettingsForm : Form
         };
 
         Controls.AddRange([
+            _projectLabel, _projectCombo,
             _languageLabel, _languageCombo,
             _launcherPathLabel, _launcherPathText, _browseButton,
             _cancelButton, _saveButton,
@@ -90,6 +104,7 @@ public sealed class SettingsForm : Form
 
     private void ApplyTexts()
     {
+        _projectLabel.Text = _localization.Get("settings.project");
         _languageLabel.Text = _localization.Get("settings.language");
         _launcherPathLabel.Text = _localization.Get("settings.launcher_path");
         _saveButton.Text = _localization.Get("settings.save");
@@ -106,6 +121,7 @@ public sealed class SettingsForm : Form
 
     private void SaveButton_Click(object? sender, EventArgs e)
     {
+        _workingCopy.Project = _projectCombo.SelectedIndex == 1 ? "russia_online" : "majestic";
         _workingCopy.Language = _languageCombo.SelectedItem?.ToString() ?? "ru";
         _workingCopy.LauncherPath = _launcherPathText.Text.Trim();
 

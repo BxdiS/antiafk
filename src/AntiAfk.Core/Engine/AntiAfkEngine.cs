@@ -1,4 +1,5 @@
 ﻿using AntiAfk.Core.Abstractions;
+using AntiAfk.Core.Constants;
 using AntiAfk.Core.Engine;
 using AntiAfk.Core.Models;
 using AntiAfk.Core.Services;
@@ -83,6 +84,8 @@ public sealed class AntiAfkEngine
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        _runtime.Profile = ProjectProfile.ForProject(_configService.Current.Project);
+        _logger.Info($"Active project: {_runtime.Profile.Id}");
         SetStatus(EngineStatus.Running);
 
         try
@@ -648,7 +651,7 @@ public sealed class AntiAfkEngine
     private void ApplyScaling(GameWindowInfo game)
     {
         var screen = _windowService.GetScreenSize();
-        _coordinates = CoordinateScaler.Apply(game.Left, game.Top, game.Width, game.Height, screen.Width, screen.Height);
+        _coordinates = CoordinateScaler.Apply(game.Left, game.Top, game.Width, game.Height, screen.Width, screen.Height, _runtime.Profile);
         _runtime.Coordinates = _coordinates;
         _progress.LastWindowWidth = game.Width;
         _progress.LastWindowHeight = game.Height;

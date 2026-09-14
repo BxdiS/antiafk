@@ -1,5 +1,3 @@
-using AntiAfk.Core.Constants;
-
 namespace AntiAfk.Core.Vision;
 
 /// One icon found on the spawn bar. Slot is its position from the left, counting only icons that
@@ -41,27 +39,13 @@ public sealed record SpawnSlotProbe(int CenterX, double Score, double GlyphRatio
 /// </summary>
 public static class SpawnBarDetector
 {
-    private const int MinIcons = 2;
-
-    /// A pixel at or below this luminance counts as part of the dark disc behind a glyph. The
-    /// discs are drawn dark and translucent over the map, so this has to clear the darkest parts
-    /// of the city seen from above without reaching the disc itself.
-    private const int DiscMaxLuminance = 110;
-
-    /// Share of the ring inside a disc that has to be dark for a slot to look like an icon.
-    private const double MinDiscRatio = 0.70;
-
-    /// Glyph share of the glyph box at which a slot counts as fully convincing. The glyphs are
-    /// line art, not solid shapes, so even a large one covers well under a tenth of its box.
-    private const double TargetGlyphRatio = 0.06;
-
-    /// Below this there is no glyph, above it the box is not a glyph but something white behind
-    /// the bar - the map has bright patches and the disc does not cover the whole box.
-    private const double MinGlyphRatio = 0.015;
+    /// Above this the box is not a glyph but something white behind the bar - the map has bright
+    /// patches and the disc does not cover the whole box.
     private const double MaxGlyphRatio = 0.60;
 
-    /// Score a slot has to reach to hold an icon, and that the positions past both ends have to
-    /// stay under for the count to be the right one.
+    /// Default slot-score threshold. The actual value used comes from the layout, so a project
+    /// with subtler backgrounds can lower it without changing this constant. Kept public because
+    /// the icon-generation tool reports against the default in its per-position summary.
     public const double MinSlotScore = 0.55;
 
     /// Step used when searching for the exact row. Finer than this measures nothing: the glyph box
@@ -82,7 +66,7 @@ public static class SpawnBarDetector
         {
             var rowY = layout.RowY + offset;
 
-            for (var count = MinIcons; count <= GameConstants.MaxSpawnIcons; count++)
+            for (var count = layout.MinIcons; count <= layout.MaxIcons; count++)
             {
                 var reading = TryFit(strip, layout, rowY, count, scores);
                 if (reading is not null && (best is null || reading.Confidence > best.Confidence))
@@ -122,7 +106,7 @@ public static class SpawnBarDetector
             var centerX = layout.SlotCenterX(index, count);
             var score = ProbeSlot(strip, layout, centerX, rowY, cache);
 
-            if (score is null || score.Score < MinSlotScore)
+            if (score is null || score.Score < layout.MinSlotScore)
             {
                 return null;
             }
@@ -134,12 +118,15 @@ public static class SpawnBarDetector
         // The count is only right if the bar stops where this arrangement says it does. Without
         // this test every count from 2 up to the real one fits, because their slots are a subset
         // of the icons that are on screen.
+        //
+        // A left-aligned bar has no left flank by construction: slot 0 is the leftmost icon, and
+        // there is no valid position further left to check. Only the right flank is meaningful.
         var strongestFlank = 0.0;
-        foreach (var flankX in new[]
-                 {
-                     layout.SlotCenterX(-1, count),
-                     layout.SlotCenterX(count, count)
-                 })
+        var flanks = layout.LeftAligned
+            ? new[] { layout.SlotCenterX(count, count) }
+            : new[] { layout.SlotCenterX(-1, count), layout.SlotCenterX(count, count) };
+
+        foreach (var flankX in flanks)
         {
             var flank = ProbeSlot(strip, layout, flankX, rowY, cache);
             if (flank is null)
@@ -148,7 +135,7 @@ public static class SpawnBarDetector
                 continue;
             }
 
-            if (flank.Score >= MinSlotScore)
+            if (flank.Score >= layout.MinSlotScore)
             {
                 return null;
             }
@@ -164,7 +151,7 @@ public static class SpawnBarDetector
                 index,
                 slot.CenterX,
                 rowY,
-                SpawnIconSignature.Sample(strip, strip.ToLocalX(slot.CenterX), strip.ToLocalY(rowY), layout.GlyphBox),
+                SpawnIconSignature.Sample(strip, strip.ToLocalX(slot.CenterX), strip.ToLocalY(rowY), layout.GlyphBox, layout.GlyphWhiteRampLow, layout.GlyphWhiteRampHigh),
                 slot.Score,
                 slot.GlyphRatio,
                 slot.DiscRatio);
@@ -175,8 +162,8 @@ public static class SpawnBarDetector
 
     /// <summary>
     /// How much the position at (<paramref name="centerX"/>, <paramref name="rowY"/>) looks like a
-    /// spawn icon: a dark disc with a white glyph in it. Null when the position is not fully inside
-    /// the captured strip.
+    /// spawn icon: a dark background with a white glyph in it. Null when the position is not fully
+    /// inside the captured strip.
     /// </summary>
     private static SpawnSlotProbe? ProbeSlot(
         PixelGrid strip,
@@ -194,37 +181,66 @@ public static class SpawnBarDetector
         var localY = strip.ToLocalY(rowY);
         var reach = layout.Diameter / 2;
 
-        if (!strip.Contains(localX - reach, localY - reach) || !strip.Contains(localX + reach, localY + reach))
-        {
-            return null;
-        }
-
-        // The ring sits inside the disc but outside the glyph, so it reads the disc itself rather
-        // than whatever the glyph happens to cover.
-        var innerRadius = layout.Diameter * 0.36;
-        var outerRadius = layout.Diameter * 0.46;
-        var innerSquared = innerRadius * innerRadius;
-        var outerSquared = outerRadius * outerRadius;
-
         var ringTotal = 0;
         var ringDark = 0;
 
-        for (var dy = -reach; dy <= reach; dy++)
+        if (layout.CircularBackground)
         {
-            for (var dx = -reach; dx <= reach; dx++)
+            if (!strip.Contains(localX - reach, localY - reach) || !strip.Contains(localX + reach, localY + reach))
             {
-                var distanceSquared = dx * dx + dy * dy;
-                if (distanceSquared < innerSquared || distanceSquared > outerSquared)
+                return null;
+            }
+
+            var innerRadius = layout.Diameter * 0.36;
+            var outerRadius = layout.Diameter * 0.46;
+            var innerSquared = innerRadius * innerRadius;
+            var outerSquared = outerRadius * outerRadius;
+
+            for (var dy = -reach; dy <= reach; dy++)
+            {
+                for (var dx = -reach; dx <= reach; dx++)
                 {
-                    continue;
+                    var distanceSquared = dx * dx + dy * dy;
+                    if (distanceSquared < innerSquared || distanceSquared > outerSquared)
+                    {
+                        continue;
+                    }
+
+                    var (r, g, b) = strip[localX + dx, localY + dy];
+                    ringTotal++;
+
+                    if (PixelGrid.Luminance(r, g, b) <= layout.DiscMaxLuminance)
+                    {
+                        ringDark++;
+                    }
                 }
+            }
+        }
+        else
+        {
+            var halfPitch = layout.Pitch / 2;
+            if (!strip.Contains(localX - halfPitch, localY - reach) || !strip.Contains(localX + halfPitch, localY + reach))
+            {
+                return null;
+            }
 
-                var (r, g, b) = strip[localX + dx, localY + dy];
-                ringTotal++;
-
-                if (PixelGrid.Luminance(r, g, b) <= DiscMaxLuminance)
+            var glyphHalf = layout.GlyphBox / 2;
+            for (var dy = -reach; dy <= reach; dy++)
+            {
+                for (var dx = -halfPitch; dx <= halfPitch; dx++)
                 {
-                    ringDark++;
+                    if (Math.Abs(dx) <= glyphHalf && Math.Abs(dy) <= glyphHalf)
+                    {
+                        continue;
+                    }
+
+                    var (r, g, b) = strip[localX + dx, localY + dy];
+                    ringTotal++;
+
+                    if (PixelGrid.Luminance(r, g, b) <= layout.DiscMaxLuminance)
+                    {
+                        ringDark++;
+                    }
                 }
             }
         }
@@ -242,7 +258,7 @@ public static class SpawnBarDetector
                 var (r, g, b) = strip[localX + dx, localY + dy];
                 glyphTotal++;
 
-                if (SpawnIconSignature.IsGlyphPixel(r, g, b))
+                if (SpawnIconSignature.IsGlyphPixel(r, g, b, layout.GlyphWhiteRampLow, layout.GlyphWhiteRampHigh))
                 {
                     glyphPixels++;
                 }
@@ -250,23 +266,23 @@ public static class SpawnBarDetector
         }
 
         var glyphRatio = glyphTotal == 0 ? 0 : glyphPixels / (double)glyphTotal;
-        var score = ComputeScore(discRatio, glyphRatio);
+        var score = ComputeScore(discRatio, glyphRatio, layout);
 
         var result = new SpawnSlotProbe(centerX, score, glyphRatio, discRatio);
         cache[(rowY, centerX)] = result;
         return result;
     }
 
-    private static double ComputeScore(double discRatio, double glyphRatio)
+    private static double ComputeScore(double discRatio, double glyphRatio, SpawnBarLayout layout)
     {
-        if (discRatio < MinDiscRatio || glyphRatio < MinGlyphRatio || glyphRatio > MaxGlyphRatio)
+        if (discRatio < layout.MinDiscRatio || glyphRatio < layout.MinGlyphRatio || glyphRatio > MaxGlyphRatio)
         {
             return 0;
         }
 
         // Both parts have to hold up: a disc with nothing on it is the gap between two icons seen
         // against a dark rooftop, and a white shape with no disc under it is the map.
-        var glyphStrength = Math.Min(1.0, glyphRatio / TargetGlyphRatio);
+        var glyphStrength = Math.Min(1.0, glyphRatio / layout.TargetGlyphRatio);
         return discRatio * glyphStrength;
     }
 }
