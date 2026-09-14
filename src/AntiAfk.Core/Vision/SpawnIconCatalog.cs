@@ -342,11 +342,14 @@ public static class SpawnIconCatalog
         // Russia Online — exit_point. RO renders this icon differently from Majestic (a framed
         // picture with a location marker overlay, not a pin sitting on a map), so it needs its own
         // glyph name. The id stays "exit_point" so the same spawn priority list works for both
-        // projects. Signature from ro-spawn.png at 1920x1080.
+        // projects. Two references because the same glyph across two RO screenshots lands 0.24
+        // from itself — enough to eat the room between "same glyph" and "different glyph"; a
+        // second reference collapses that back into the low-hundredths.
         new SpawnIconTemplate(
             "ro_exit",
             ["exit_point"],
             [
+                // ro-spawn.png
                 SpawnIconSignature.FromHex(
                     "6f8002f900000000" +
                     "9f8000fb00000000" +
@@ -363,7 +366,53 @@ public static class SpawnIconCatalog
                     "0f900cfffffc300c" +
                     "0518fffffffffb61" +
                     "006ffffffffffff5" +
+                    "0000000000000000"),
+                // ro-spawn-apartment.png
+                SpawnIconSignature.FromHex(
+                    "ff3005f800000000" +
+                    "ff3007f800000000" +
+                    "8aa68bd400000000" +
+                    "04feef6011210000" +
+                    "00eedd04eefff500" +
+                    "006ff42cfff87385" +
+                    "000af2edef500bfa" +
+                    "009009ff9149eeec" +
+                    "04feeff800cedeef" +
+                    "06feee0000cfdeef" +
+                    "28feb34963259def" +
+                    "59d00befff9004df" +
+                    "7c200efffffc400d" +
+                    "113bfffffeeffc71" +
+                    "0026444445444440" +
                     "0000000000000000")
+            ]),
+
+        // Russia Online — personal_apartment. RO renders this as two side-by-side blocks of
+        // windows on a shared ground line — visually the same idea as Majestic's tower but with
+        // a different layout, so a separate glyph name. The id stays "personal_apartment" so the
+        // player's priority list is written the same way for both projects.
+        // Signature from ro-spawn-apartment.png at 1920x1080.
+        new SpawnIconTemplate(
+            "ro_apartment",
+            ["personal_apartment"],
+            [
+                SpawnIconSignature.FromHex(
+                    "007eeffbdf700000" +
+                    "009ed9fdcf800000" +
+                    "009fd6f2df706993" +
+                    "009ef2e5df80fff5" +
+                    "008feefddf80bef5" +
+                    "008fe5e3ef80d4c4" +
+                    "009ef8f5df80dad4" +
+                    "008efafaee80e9e4" +
+                    "008fe4e0fe80f2f5" +
+                    "009ef7f6df80f7b6" +
+                    "009ffbfabf80fb82" +
+                    "009fe3c0df90f300" +
+                    "00aef7fdcf90a0f5" +
+                    "008fededdf80d1d9" +
+                    "008effffff90f474" +
+                    "005aaaaaaa8a99aa")
             ]),
 
         // Russia Online — organisation/gang HQ. New spawn type, no Majestic equivalent. The id
